@@ -1,0 +1,15 @@
+{
+  "master_rows": 1000,
+  "simulation_rows": 30000,
+  "unique_trains": 995,
+  "steps_per_train": 30,
+  "graph_nodes": 30,
+  "graph_edges": 574,
+  "future_target_horizon_min": 20,
+  "propagation_rate": 0.5869666666666666,
+  "future_delay_mean": 6.601217548490338,
+  "future_delay_std": 8.046087108924938,
+  "future_delay_min": -118.29724176299344,
+  "future_delay_max": 24.000000000000007,
+  "synthetic_note": "Prototype-only synthetic sequential extension calibrated to the supplied master snapshot and observed station transitions. Not real operational railway measurements."
+}

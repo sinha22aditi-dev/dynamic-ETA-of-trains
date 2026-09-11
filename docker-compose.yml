@@ -1,0 +1,52 @@
+version: '3.8'
+
+services:
+  postgres:
+    image: postgres:15-alpine
+    container_name: dynamicrail_postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: dynamicrail
+      POSTGRES_PASSWORD: dynamicrail
+      POSTGRES_DB: dynamicrail
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U dynamicrail -d dynamicrail"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  ml_service:
+    build:
+      context: ./DynamicRail_Complete_ML
+      dockerfile: Dockerfile
+    container_name: dynamicrail_ml
+    restart: unless-stopped
+    ports:
+      - "8000:8000"
+    environment:
+      - PORT=8000
+
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: dynamicrail_backend
+    restart: unless-stopped
+    ports:
+      - "8080:8080"
+    environment:
+      - DATABASE_URL=postgresql+asyncpg://dynamicrail:dynamicrail@postgres:5432/dynamicrail
+      - ML_SERVICE_URL=http://ml_service:8000
+      - APP_ENV=production
+    depends_on:
+      postgres:
+        condition: service_healthy
+      ml_service:
+        condition: service_started
+
+volumes:
+  postgres_data:

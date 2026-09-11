@@ -1,0 +1,17 @@
+{
+  "duplicate_rows": 0,
+  "missing_current_delay": 0,
+  "missing_speed": 0,
+  "speed_out_of_bounds": 0,
+  "rain_negative": 0,
+  "visibility_nonpositive": 0,
+  "distance_negative": 0,
+  "sequence_time_monotonic": true,
+  "intervals_not_10min": 0,
+  "target_missing_expected_last2_per_sequence": 2000,
+  "unique_sequences": 1000,
+  "rows": 30000,
+  "target_min": -4.992990030499795,
+  "target_max": 24.00000000000001,
+  "propagation_rate": 0.5902333333333334
+}

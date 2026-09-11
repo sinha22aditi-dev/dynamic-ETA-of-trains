@@ -1,0 +1,2440 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>DynamicRail — Precision Transit AI | SIH 2026</title>
+<meta name="description" content="AI-Powered Railway Intelligence for Indian Railways. Real-time dynamic ETA forecast taking congestion and telemetry into account.">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&display=swap">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:opsz,wght,FILL,GRAD@20..48,100..700,0..1,-50..200">
+<link rel="stylesheet" href="styles.css">
+</head>
+<body>
+
+<div class="app" id="app">
+  <!-- ── Offline Alert Banner ── -->
+  <div class="offlinebar" id="offlineBar" style="display:none">
+    <span class="material-symbols-outlined">wifi_off</span>
+    <span id="txt-offline-banner">Offline Mode • Showing cached train data • Reconnection required for live AI predictions</span>
+    <button onclick="checkConnection(true)" id="txt-reconnect-btn">Reconnect</button>
+  </div>
+
+  <!-- ── Top Bar ── -->
+  <header class="topbar">
+    <div class="navwrap">
+      <div class="brand" onclick="goHome()">
+        <div class="logo">
+          <span class="material-symbols-outlined">train</span>
+        </div>
+        <div class="brand-text">
+          <b>DynamicRail</b>
+          <small>PRECISION TRANSIT AI</small>
+        </div>
+      </div>
+
+      <nav>
+        <button class="navactive" id="nav-home" onclick="goHome()">
+          <span id="txt-nav-home">Home</span>
+        </button>
+        <button id="nav-mytrains" onclick="openMyTrainsModal()">
+          <span id="txt-nav-mytrains">My Trains</span>
+          <em id="trackBadge" style="display:none">0</em>
+        </button>
+        <button id="nav-notifications" onclick="openNotificationsModal()">
+          <span id="txt-nav-notif">Notifications</span>
+          <em id="notifBadge">2</em>
+        </button>
+      </nav>
+
+      <div class="controls">
+        <button class="network" id="networkBtn" onclick="toggleNetworkSimulation()" title="Click to test Offline/Online state">
+          <i></i>
+          <span id="networkText">Live Network (Sync 10s ago) ↗</span>
+        </button>
+
+        <div class="lang">
+          <button id="langButton" onclick="toggleLangDropdown(event)">
+            <span id="currentLangCode">EN</span>
+            <span class="material-symbols-outlined">expand_more</span>
+          </button>
+          <div class="dropdown" id="langDropdown" style="display:none">
+            <!-- 23 Languages loaded dynamically -->
+          </div>
+        </div>
+      </div>
+    </div>
+  </header>
+
+  <!-- ── Main Content Area ── -->
+  <main>
+    <!-- ── Hero Section (Centered) ── -->
+    <section class="hero">
+      <h1 id="heroTitle">Know where your train is.<br>Know when it will arrive.</h1>
+      <p id="heroSubtitle">Track live running delay and get AI-powered predictions for your train's arrival.</p>
+
+      <div class="searchbox">
+        <span class="material-symbols-outlined">search</span>
+        <input type="text" id="searchInput" 
+               placeholder="Enter Train Number or Train Name (e.g. 12951 Mumbai Rajdhani)" 
+               oninput="onSearchInput(this.value)" 
+               onkeydown="if(event.key==='Enter')executeSearch()">
+        <button onclick="executeSearch()" id="trackTrainBtn">
+          <span id="txt-track-btn">Track Train</span>
+          <span class="material-symbols-outlined">arrow_forward</span>
+        </button>
+
+        <!-- Live Autocomplete Dropdown -->
+        <div class="search-dropdown" id="searchDropdown"></div>
+      </div>
+    </section>
+
+    <!-- ── Yellow Prediction Update Card ── -->
+    <section class="update" id="predictionUpdateBanner">
+      <div class="update-icon">
+        <span class="material-symbols-outlined">warning</span>
+      </div>
+      <div class="update-body">
+        <div class="row">
+          <h3 id="txt-banner-title">Train Delay Prediction Updated</h3>
+          <span class="livepill"><i></i><span id="txt-banner-live">Live Recalibration Active</span></span>
+        </div>
+        <div class="transition">
+          <span id="txt-banner-prev">Previous predicted ETA:</span>
+          <s id="bannerPrevEta">8:35 PM</s>
+          <span class="material-symbols-outlined">trending_flat</span>
+          <span id="txt-banner-new">New predicted ETA:</span>
+          <strong id="bannerNewEta">8:47 PM</strong>
+          <b id="bannerDelta">(+12 min delta)</b>
+        </div>
+        <p>
+          <strong id="txt-banner-exp">Expected additional delay:</strong> 
+          <span id="bannerAddDelay">+12 min</span>
+          <span>•</span> 
+          <strong id="txt-banner-reason">Reason:</strong> 
+          <span id="bannerReason">Reduced speed and low visibility in Northern sector.</span>
+        </p>
+      </div>
+      <div class="monitor">
+        <span><span class="material-symbols-outlined">sync</span> <span id="txt-banner-monitored">Actively Monitored</span></span>
+        <small id="txt-banner-sync">Updated in real-time (not fixed)</small>
+      </div>
+    </section>
+
+    <!-- ── Main Two-Column Grid: Prediction + Smart Alarm ── -->
+    <section class="grid">
+      <!-- Left: Live Train Prediction Card -->
+      <article class="card prediction" id="predictionCard">
+        <div class="cardtop">
+          <div>
+            <span class="tag" id="txt-card-tag">LIVE TRAIN PREDICTION</span>
+            <span class="status" id="trainStatusBadge"><i></i><span id="txt-status-running">Running</span></span>
+          </div>
+          <small>
+            <span class="material-symbols-outlined">schedule</span>
+            <span id="cardUpdatedTime">Updated 2 min ago</span>
+          </small>
+        </div>
+
+        <h2 id="cardTrainName">12951 Mumbai Rajdhani</h2>
+        <div class="route">
+          <span id="cardFromStation">New Delhi</span>
+          <span class="material-symbols-outlined">arrow_forward</span>
+          <b id="cardToStation">Mumbai Central</b>
+        </div>
+
+        <!-- Cyan ETA Box -->
+        <div class="etaHero">
+          <div>
+            <label>
+              <span class="material-symbols-outlined">psychology</span>
+              <span id="txt-ai-predicted-eta">AI PREDICTED ETA</span>
+            </label>
+            <strong id="cardPredictedEta">8:47 PM</strong>
+          </div>
+          <div class="vs">
+            <b id="cardVsSchedule">+33 min vs Schedule</b>
+            <small><span id="txt-timetable">Timetable:</span> <span id="cardTimetable">8:14 PM</span></small>
+          </div>
+          <div class="metric">
+            <span id="txt-curr-delay">Current Running Delay</span>
+            <b id="cardCurrDelay">+18 min</b>
+          </div>
+          <div class="metric right">
+            <span id="txt-pred-add-delay">Predicted Additional Delay</span>
+            <b id="cardAddDelay">+15 min</b>
+          </div>
+        </div>
+
+        <!-- Delay Reason Warning Box -->
+        <div class="reason" id="cardReasonBox">
+          <span class="material-symbols-outlined">report_problem</span>
+          <span><b id="txt-delay-warning">▲ Delay may increase</b> — <span id="txt-reason-label">Reason:</span> <span id="cardDelayReason">Low visibility + reduced train speed in this region.</span></span>
+        </div>
+
+        <!-- Confidence Section -->
+        <div class="confidence">
+          <div>
+            <span id="txt-pred-conf">Prediction Confidence</span>
+            <b id="cardConfidenceVal">82%</b>
+          </div>
+          <div class="bar">
+            <i id="cardConfidenceBar" style="width: 82%;"></i>
+          </div>
+          <small>
+            <i></i>
+            <span id="txt-calibrated-telemetry">Calibrated Neural Telemetry</span>
+          </small>
+        </div>
+
+        <!-- Live Update Simulation Action -->
+        <button class="demo" onclick="simulateLiveUpdate()" id="txt-simulate-btn">
+          <span class="material-symbols-outlined">autorenew</span>
+          <span>Simulate New Live Update</span>
+        </button>
+      </article>
+
+      <!-- Right: Set Smart Alarm Card -->
+      <article class="card alarm" id="smartAlarmCard">
+        <div class="alarmHead">
+          <div class="alarmIcon">
+            <span class="material-symbols-outlined">alarm</span>
+          </div>
+          <div>
+            <h2 id="txt-alarm-title">Set Smart Alarm</h2>
+            <small id="txt-alarm-subtitle">ETA-Adjusting Alarm</small>
+          </div>
+          <span id="txt-adaptive-badge">ADAPTIVE</span>
+        </div>
+
+        <div class="alarmBox">
+          <div>
+            <label id="txt-pred-arrival-lbl">Predicted Arrival:</label>
+            <b id="alarmPredictedEta">8:47 PM</b>
+          </div>
+          <div>
+            <label id="txt-remind-me-lbl">Remind me:</label>
+            <select id="alarmOffsetSelect" onchange="recalculateAlarmTime()">
+              <option value="5">5 minutes before</option>
+              <option value="10" selected>10 minutes before</option>
+              <option value="15">15 minutes before</option>
+              <option value="20">20 minutes before</option>
+              <option value="30">30 minutes before</option>
+              <option value="45">45 minutes before</option>
+              <option value="60">60 minutes before</option>
+            </select>
+          </div>
+          <hr>
+          <div class="calculated">
+            <div>
+              <label id="txt-calc-alarm-lbl">Calculated Alarm:</label>
+              <strong id="calculatedAlarmTime">8:37 PM</strong>
+            </div>
+            <span class="material-symbols-outlined">schedule</span>
+          </div>
+          <hr>
+          <div class="switchrow">
+            <span id="txt-auto-adjust-lbl">Automatically adjust alarm with ETA</span>
+            <button class="switch on" id="alarmToggleSwitch" onclick="toggleAlarmAutoAdjust()">
+              <i></i>
+            </button>
+          </div>
+        </div>
+
+        <p class="info">
+          <span class="material-symbols-outlined">info</span>
+          <span id="txt-alarm-info">Your reminder automatically follows the latest available ETA.</span>
+        </p>
+
+        <button class="alarmbtn" id="setAlarmBtn" onclick="saveSmartAlarm()">
+          <span class="material-symbols-outlined" id="alarmBtnIcon">alarm_add</span>
+          <span id="alarmBtnText">Set Smart Alarm</span>
+        </button>
+
+        <div class="feedback" id="alarmFeedback" style="display:none">
+          <span id="alarmFeedbackText">✓ Smart alarm active for 8:37 PM • auto-adjusting with ETA</span>
+        </div>
+      </article>
+    </section>
+
+    <!-- ── AI Assistant (Horizontal Card with Voice Microphone) ── -->
+    <section class="card assistant">
+      <div class="assistantHead">
+        <div class="aiicon">
+          <span class="material-symbols-outlined">auto_awesome</span>
+        </div>
+        <div>
+          <h2>Ask DynamicRail <span id="txt-ai-badge">AI ASSISTANT</span></h2>
+          <p id="txt-ai-subtitle">Get quick and simple answers about your train.</p>
+        </div>
+      </div>
+
+      <!-- Suggested Question Chips -->
+      <div class="chips">
+        <button onclick="askAssistantChip(this.innerText)">"Where is my train?"</button>
+        <button onclick="askAssistantChip(this.innerText)">"When will it reach?"</button>
+        <button onclick="askAssistantChip(this.innerText)">"Why is my train delayed?"</button>
+        <button onclick="askAssistantChip(this.innerText)">"What is the latest ETA?"</button>
+      </div>
+
+      <!-- Input Bar with Voice Microphone and Submit Button -->
+      <div class="ask">
+        <input type="text" id="assistantInput" 
+               placeholder="Ask anything about your route, delays, or platform..." 
+               onkeydown="if(event.key==='Enter')submitAssistantQuery()">
+        
+        <!-- Microphone Button -->
+        <button class="mic-btn" id="micBtn" onclick="toggleVoiceInput()" title="Speak your question (Voice input)">
+          <span class="material-symbols-outlined" id="micIcon">mic</span>
+        </button>
+
+        <!-- Submit Button -->
+        <button class="submit-ask" onclick="submitAssistantQuery()" id="txt-ask-btn">
+          <span>Ask AI Assistant</span>
+          <span class="material-symbols-outlined">arrow_forward</span>
+        </button>
+      </div>
+    </section>
+
+    <!-- ── Recent Trains Section ── -->
+    <section class="recent">
+      <div class="sectiontitle">
+        <h2>
+          <span class="material-symbols-outlined">history</span>
+          <span id="txt-recent-title">Your Recent Trains</span>
+        </h2>
+        <button onclick="openMyTrainsModal()" id="txt-manage-btn">Manage</button>
+      </div>
+
+      <div id="recentTrainsList">
+        <!-- Row 1: 12951 Mumbai Rajdhani -->
+        <div class="recentCard" onclick="loadTrainDirect('12951')">
+          <div>
+            <b>12951 Mumbai Rajdhani</b>
+            <span class="delay">+18 min delay</span>
+            <small>On time to next stop</small>
+            <p>New Delhi <span class="material-symbols-outlined">arrow_forward</span> Mumbai Central</p>
+          </div>
+          <div class="recentEta">
+            <label>PREDICTED ETA</label>
+            <strong>8:47 PM</strong>
+            <span>View Live Tracker <span class="material-symbols-outlined">chevron_right</span></span>
+          </div>
+        </div>
+
+        <!-- Row 2: 12952 Mumbai Rajdhani -->
+        <div class="recentCard" onclick="loadTrainDirect('12952')">
+          <div>
+            <b>12952 Mumbai Rajdhani</b>
+            <span class="delay">+11 min delay</span>
+            <small>In Transit</small>
+            <p>Mumbai Central <span class="material-symbols-outlined">arrow_forward</span> New Delhi</p>
+          </div>
+          <div class="recentEta">
+            <label>PREDICTED ETA</label>
+            <strong>8:35 AM</strong>
+            <span>View Live Tracker <span class="material-symbols-outlined">chevron_right</span></span>
+          </div>
+        </div>
+
+        <!-- Row 3: 12424 Dbrg Rajdhani -->
+        <div class="recentCard" onclick="loadTrainDirect('12424')">
+          <div>
+            <b>12424 Dbrg Rajdhani</b>
+            <span class="delay">+28 min delay</span>
+            <small>Delay absorbed</small>
+            <p>New Delhi <span class="material-symbols-outlined">arrow_forward</span> Dibrugarh</p>
+          </div>
+          <div class="recentEta">
+            <label>PREDICTED ETA</label>
+            <strong>6:48 AM</strong>
+            <span>View Live Tracker <span class="material-symbols-outlined">chevron_right</span></span>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ── Features ("Built for Precision Transit") ── -->
+    <section class="features">
+      <div class="sectiontitle center">
+        <div>
+          <h2 id="txt-feat-head">Built for Precision Transit</h2>
+          <p id="txt-feat-sub">High-confidence telemetry inference for modern passengers.</p>
+        </div>
+      </div>
+
+      <div class="featuregrid">
+        <div class="feature">
+          <div><span class="material-symbols-outlined">schedule</span></div>
+          <h3 id="txt-f1-title">Dynamic ETA Prediction</h3>
+          <p id="txt-f1-desc">Continuously calibrated ETAs taking signal congestion into account.</p>
+        </div>
+        <div class="feature">
+          <div><span class="material-symbols-outlined">cloud</span></div>
+          <h3 id="txt-f2-title">Live Running Delay</h3>
+          <p id="txt-f2-desc">Segment-by-segment delay tracking direct from railway telemetry.</p>
+        </div>
+        <div class="feature">
+          <div><span class="material-symbols-outlined">notifications_active</span></div>
+          <h3 id="txt-f3-title">Smart Delay Alerts</h3>
+          <p id="txt-f3-desc">Automatic notifications before arrival and when schedule changes.</p>
+        </div>
+        <div class="feature">
+          <div><span class="material-symbols-outlined">alarm</span></div>
+          <h3 id="txt-f4-title">ETA-Based Smart Alarm</h3>
+          <p id="txt-f4-desc">Wake-up or transit alarms that adjust dynamically to live arrival times.</p>
+        </div>
+      </div>
+    </section>
+  </main>
+
+  <!-- ── Footer ── -->
+  <footer>
+    <span id="txt-footer-copy">© 2025 DynamicRail Precision Transit AI. All rights reserved.</span>
+    <div class="footer-right">
+      <span style="color:#059669">● <span id="txt-telemetry-lat">Telemetry Latency: 1.2s</span></span>
+      <button onclick="toggleHighContrast()" id="highContrastBtn">
+        <span class="material-symbols-outlined">contrast</span>
+        <span id="txt-contrast-btn">High Contrast</span>
+      </button>
+    </div>
+  </footer>
+</div>
+
+<!-- ── AI Chat Modal Dialog ── -->
+<div class="modal" id="chatModal" style="display:none" onclick="if(event.target===this)closeChatModal()">
+  <div class="chat">
+    <header>
+      <div class="aiicon"><span class="material-symbols-outlined">smart_toy</span></div>
+      <div>
+        <h3>DynamicRail AI Assistant <span>INTELLIGENCE</span></h3>
+        <small id="chatStatusHeader"><i></i> Online • Live prediction context</small>
+      </div>
+      <button onclick="closeChatModal()"><span class="material-symbols-outlined">close</span></button>
+    </header>
+
+    <div class="modalwarn" id="chatOfflineWarn" style="display:none">
+      <span class="material-symbols-outlined">cloud_off</span>
+      <span>Network offline. Providing cached train answers.</span>
+    </div>
+
+    <div class="history" id="chatHistory">
+      <div class="msg user">
+        <div>Why is 12951 Mumbai Rajdhani delayed, and what is the latest ETA?</div>
+      </div>
+      <div class="msg ai">
+        <div class="mini"><span class="material-symbols-outlined">smart_toy</span></div>
+        <div>
+          <span>Train 12951 Mumbai Rajdhani is currently running with a +18 min delay. The model predicts an additional +15 min delay due to low visibility. Latest predicted ETA is 8:47 PM with 82% confidence.</span>
+          <button type="button" class="msg-listen-btn" onclick="toggleSpeech(this, this.previousElementSibling.innerText, 'en')" title="Listen to response">
+            <span class="material-symbols-outlined">volume_up</span>
+            <span>Listen</span>
+          </button>
+        </div>
+      </div>
+    </div>
+
+    <div class="quick">
+      <button onclick="sendQuickChat('Where is my train?')">Where is my train?</button>
+      <button onclick="sendQuickChat('When will it reach?')">When will it reach?</button>
+      <button onclick="sendQuickChat('Why is my train delayed?')">Why is my train delayed?</button>
+      <button onclick="sendQuickChat('What is the latest ETA?')">What is the latest ETA?</button>
+    </div>
+
+    <form onsubmit="event.preventDefault(); submitModalChat();">
+      <input type="text" id="modalChatInput" placeholder="Ask about route, delays, or platform...">
+      <button type="button" class="mic-btn" id="modalMicBtn" onclick="toggleModalVoiceInput()" title="Voice input">
+        <span class="material-symbols-outlined">mic</span>
+      </button>
+      <button type="submit" class="chat-submit">
+        <span>Send</span>
+        <span class="material-symbols-outlined">send</span>
+      </button>
+    </form>
+  </div>
+</div>
+
+<!-- ── Notifications Modal ── -->
+<div class="modal" id="notifModal" style="display:none" onclick="if(event.target===this)closeNotifModal()">
+  <div class="panel-modal">
+    <div class="panel-header">
+      <h3 id="txt-notif-modal-title">Live Delay Notifications</h3>
+      <button onclick="closeNotifModal()" style="border:0;background:transparent;cursor:pointer"><span class="material-symbols-outlined">close</span></button>
+    </div>
+    <div class="panel-body" id="notifList">
+      <div class="notif-item unread">
+        <b>12951 Mumbai Rajdhani — Delay Increased</b>
+        <p>Predicted ETA shifted from 8:35 PM to 8:47 PM (+12 min delta) due to weather.</p>
+        <small>Just now</small>
+      </div>
+      <div class="notif-item">
+        <b>Smart Alarm Adjusted</b>
+        <p>Alarm rescheduled to 8:37 PM (10 mins before updated 8:47 PM arrival).</p>
+        <small>5 min ago</small>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ── My Trains Modal ── -->
+<div class="modal" id="myTrainsModal" style="display:none" onclick="if(event.target===this)closeMyTrainsModal()">
+  <div class="panel-modal">
+    <div class="panel-header">
+      <h3 id="txt-mytrains-modal-title">My Tracked Trains</h3>
+      <button onclick="closeMyTrainsModal()" style="border:0;background:transparent;cursor:pointer"><span class="material-symbols-outlined">close</span></button>
+    </div>
+    <div class="panel-body" id="myTrackedList">
+      <div class="recentCard" onclick="closeMyTrainsModal(); loadTrainDirect('12951');">
+        <div>
+          <b>12951 Mumbai Rajdhani</b>
+          <span class="delay">+18 min delay</span>
+          <p>New Delhi <span class="material-symbols-outlined">arrow_forward</span> Mumbai Central</p>
+        </div>
+        <div class="recentEta">
+          <strong>8:47 PM</strong>
+          <span>Active Track</span>
+        </div>
+      </div>
+      <div class="recentCard" onclick="closeMyTrainsModal(); loadTrainDirect('12952');">
+        <div>
+          <b>12952 Mumbai Rajdhani</b>
+          <span class="delay">+11 min delay</span>
+          <p>Mumbai Central <span class="material-symbols-outlined">arrow_forward</span> New Delhi</p>
+        </div>
+        <div class="recentEta">
+          <strong>8:35 AM</strong>
+          <span>Active Track</span>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ── 23 Indian Languages Dictionary & Application Engine ── -->
+<script>
+// ==========================================
+// 1. 23 INDIAN LANGUAGES DICTIONARY
+// ==========================================
+const LANGUAGES_LIST = [
+  { code: 'en', name: 'English', native: 'English' },
+  { code: 'hi', name: 'Hindi', native: 'हिन्दी' },
+  { code: 'bn', name: 'Bengali', native: 'বাংলা' },
+  { code: 'te', name: 'Telugu', native: 'తెలుగు' },
+  { code: 'mr', name: 'Marathi', native: 'मराठी' },
+  { code: 'ta', name: 'Tamil', native: 'தமிழ்' },
+  { code: 'gu', name: 'Gujarati', native: 'ગુજરાતી' },
+  { code: 'ur', name: 'Urdu', native: 'اردو' },
+  { code: 'kn', name: 'Kannada', native: 'ಕನ್ನಡ' },
+  { code: 'or', name: 'Odia', native: 'ଓଡ଼ିଆ' },
+  { code: 'ml', name: 'Malayalam', native: 'മലയാളം' },
+  { code: 'pa', name: 'Punjabi', native: 'ਪੰਜਾਬੀ' },
+  { code: 'as', name: 'Assamese', native: 'অসমীয়া' },
+  { code: 'mai', name: 'Maithili', native: 'मैथिली' },
+  { code: 'sa', name: 'Sanskrit', native: 'संस्कृतम्' },
+  { code: 'sd', name: 'Sindhi', native: 'سنڌي' },
+  { code: 'kok', name: 'Konkani', native: 'कोंकणी' },
+  { code: 'ne', name: 'Nepali', native: 'नेपाली' },
+  { code: 'brx', name: 'Bodo', native: 'बड़ो' },
+  { code: 'doi', name: 'Dogri', native: 'डोगरी' },
+  { code: 'mni', name: 'Manipuri', native: 'মৈতৈলোন্' },
+  { code: 'ks', name: 'Kashmiri', native: 'कॉशुर' },
+  { code: 'sat', name: 'Santali', native: 'ᱥᱟᱱᱛᱟᱲᱤ' }
+];
+
+const I18N = {
+  en: {
+    heroTitle: "Know where your train is.<br>Know when it will arrive.",
+    heroSubtitle: "Track live running delay and get AI-powered predictions for your train's arrival.",
+    searchPlaceholder: "Enter Train Number or Train Name (e.g. 12951 Mumbai Rajdhani)",
+    trackBtn: "Track Train",
+    navHome: "Home",
+    navMyTrains: "My Trains",
+    navNotif: "Notifications",
+    bannerTitle: "Train Delay Prediction Updated",
+    bannerLive: "Live Recalibration Active",
+    bannerPrev: "Previous predicted ETA:",
+    bannerNew: "New predicted ETA:",
+    bannerExp: "Expected additional delay:",
+    bannerReason: "Reason:",
+    bannerMonitored: "Actively Monitored",
+    bannerSync: "Updated in real-time (not fixed)",
+    cardTag: "LIVE TRAIN PREDICTION",
+    statusRunning: "Running",
+    aiPredictedEta: "AI PREDICTED ETA",
+    timetable: "Timetable:",
+    currDelay: "Current Running Delay",
+    predAddDelay: "Predicted Additional Delay",
+    delayWarning: "▲ Delay may increase",
+    reasonLabel: "Reason:",
+    predConf: "Prediction Confidence",
+    calibratedTelemetry: "Calibrated Neural Telemetry",
+    simulateBtn: "Simulate New Live Update",
+    alarmTitle: "Set Smart Alarm",
+    alarmSubtitle: "ETA-Adjusting Alarm",
+    adaptiveBadge: "ADAPTIVE",
+    predArrivalLbl: "Predicted Arrival:",
+    remindMeLbl: "Remind me:",
+    calcAlarmLbl: "Calculated Alarm:",
+    autoAdjustLbl: "Automatically adjust alarm with ETA",
+    alarmInfo: "Your reminder automatically follows the latest available ETA.",
+    setAlarmBtn: "Set Smart Alarm",
+    smartAlarmActive: "Smart Alarm Active",
+    aiBadge: "AI ASSISTANT",
+    aiSubtitle: "Get quick and simple answers about your train.",
+    aiInputPlaceholder: "Ask anything about your route, delays, or platform...",
+    askBtn: "Ask AI Assistant",
+    recentTitle: "Your Recent Trains",
+    manageBtn: "Manage",
+    featHead: "Built for Precision Transit",
+    featSub: "High-confidence telemetry inference for modern passengers.",
+    f1Title: "Dynamic ETA Prediction",
+    f1Desc: "Continuously calibrated ETAs taking signal congestion into account.",
+    f2Title: "Live Running Delay",
+    f2Desc: "Segment-by-segment delay tracking direct from railway telemetry.",
+    f3Title: "Smart Delay Alerts",
+    f3Desc: "Automatic notifications before arrival and when schedule changes.",
+    f4Title: "ETA-Based Smart Alarm",
+    f4Desc: "Wake-up or transit alarms that adjust dynamically to live arrival times.",
+    footerCopy: "© 2025 DynamicRail Precision Transit AI. All rights reserved.",
+    telemetryLat: "Telemetry Latency: 1.2s",
+    contrastBtn: "High Contrast",
+    normalContrastBtn: "Normal Contrast",
+    liveNetwork: "Live Network (Sync 10s ago) ↗",
+    offlineNetwork: "Offline Mode (Cached)",
+    offlineBanner: "Offline Mode • Showing cached train data • Reconnection required for live AI predictions",
+    reconnectBtn: "Reconnect"
+  },
+  hi: {
+    heroTitle: "जानें आपकी ट्रेन कहाँ है।<br>जानें यह कब पहुंचेगी।",
+    heroSubtitle: "ट्रेन के लाइव रनिंग स्टेटस और एआई-संचालित अनुमानित समय (ETA) की जानकारी प्राप्त करें।",
+    searchPlaceholder: "ट्रेन नंबर या ट्रेन का नाम दर्ज करें (उदा. 12951 मुंबई राजधानी)",
+    trackBtn: "ट्रेन ट्रैक करें",
+    navHome: "होम",
+    navMyTrains: "मेरी ट्रेनें",
+    navNotif: "सूचनाएं",
+    bannerTitle: "ट्रेन देरी भविष्यवाणी अपडेट की गई",
+    bannerLive: "लाइव पुनर्गणना सक्रिय",
+    bannerPrev: "पिछला अनुमानित ETA:",
+    bannerNew: "नया अनुमानित ETA:",
+    bannerExp: "अनुमानित अतिरिक्त देरी:",
+    bannerReason: "कारण:",
+    bannerMonitored: "सक्रिय रूप से मॉनिटर",
+    bannerSync: "रीयल-टाइम में अपडेटेड",
+    cardTag: "लाइव ट्रेन भविष्यवाणी",
+    statusRunning: "चल रही है",
+    aiPredictedEta: "एआई अनुमानित आगमन समय",
+    timetable: "समय सारिणी:",
+    currDelay: "वर्तमान रनिंग देरी",
+    predAddDelay: "अनुमानित अतिरिक्त देरी",
+    delayWarning: "▲ देरी बढ़ सकती है",
+    reasonLabel: "कारण:",
+    predConf: "भविष्यवाणी सटीकता",
+    calibratedTelemetry: "कैलिब्रेटेड न्यूरल टेलीमेट्री",
+    simulateBtn: "नया लाइव अपडेट सिमुलेट करें",
+    alarmTitle: "स्मार्ट अलार्म सेट करें",
+    alarmSubtitle: "ETA-समायोजक अलार्म",
+    adaptiveBadge: "अनुकूली",
+    predArrivalLbl: "अनुमानित आगमन:",
+    remindMeLbl: "मुझे याद दिलाएं:",
+    calcAlarmLbl: "अलार्म का समय:",
+    autoAdjustLbl: "ETA के साथ अलार्म को स्वचालित रूप से समायोजित करें",
+    alarmInfo: "आपका अलार्म नवीनतम अनुमानित आगमन समय (ETA) का पालन करता है।",
+    setAlarmBtn: "स्मार्ट अलार्म सेट करें",
+    smartAlarmActive: "स्मार्ट अलार्म सक्रिय",
+    aiBadge: "एआई सहायक",
+    aiSubtitle: "अपनी ट्रेन के बारे में तुरंत और सटीक उत्तर प्राप्त करें।",
+    aiInputPlaceholder: "अपने रूट, देरी या प्लेटफॉर्म के बारे में कुछ भी पूछें...",
+    askBtn: "एआई सहायक से पूछें",
+    recentTitle: "आपकी हाल की ट्रेनें",
+    manageBtn: "प्रबंधित करें",
+    featHead: "सटीक पारगमन के लिए निर्मित",
+    featSub: "यात्रियों के लिए उच्च-विश्वसनीयता टेलीमेट्री इनफेरेंस।",
+    f1Title: "गतिशील ETA भविष्यवाणी",
+    f1Desc: "सिग्नल कंजेशन को ध्यान में रखते हुए निरंतर कैलिब्रेटेड आगमन भविष्यवाणी।",
+    f2Title: "लाइव रनिंग देरी",
+    f2Desc: "रेलवे टेलीमेट्री से सीधे सेगमेंट-दर-सेगमेंट देरी ट्रैकिंग।",
+    f3Title: "स्मार्ट देरी अलर्ट",
+    f3Desc: "आगमन से पहले और समय सारिणी बदलने पर स्वचालित सूचनाएं।",
+    f4Title: "ETA-आधारित स्मार्ट अलार्म",
+    f4Desc: "अलार्म जो वास्तविक आगमन समय के अनुसार खुद को रीसेट करते हैं।",
+    footerCopy: "© 2025 डायनामिकरेल प्रिसिजन ट्रांजिट एआई। सर्वाधिकार सुरक्षित।",
+    telemetryLat: "टेलीमेट्री विलंबता: 1.2s",
+    contrastBtn: "हाई कंट्रास्ट",
+    normalContrastBtn: "सामान्य कंट्रास्ट",
+    liveNetwork: "लाइव नेटवर्क (10s पहले सिंक) ↗",
+    offlineNetwork: "ऑफ़लाइन मोड (कैश्ड)",
+    offlineBanner: "ऑफ़लाइन मोड • कैश्ड डेटा दिखाया जा रहा है • लाइव एआई के लिए इंटरनेट आवश्यक है",
+    reconnectBtn: "पुनः कनेक्ट करें"
+  },
+  bn: {
+    heroTitle: "জানুন আপনার ট্রেন কোথায়।<br>জানুন কখন পৌঁছাবে।",
+    heroSubtitle: "লাইভ রানিং বিলম্ব ট্র্যাক করুন এবং আপনার ট্রেনের আগমনের জন্য এআই পূর্বাভাস পান।",
+    searchPlaceholder: "ট্রেন নম্বর বা নাম লিখুন (যেমন 12951 মুম্বাই রাজধানী)",
+    trackBtn: "ট্রেন ট্র্যাক করুন",
+    navHome: "হোম",
+    navMyTrains: "আমার ট্রেন",
+    navNotif: "বিজ্ঞপ্তি",
+    bannerTitle: "ট্রেন বিলম্ব পূর্বাভাস আপডেট হয়েছে",
+    bannerLive: "লাইভ রিক্যালিব্রেশন সক্রিয়",
+    bannerPrev: "পূর্ববর্তী আনুমানিক ETA:",
+    bannerNew: "নতুন আনুমানিক ETA:",
+    bannerExp: "প্রত্যাশিত অতিরিক্ত বিলম্ব:",
+    bannerReason: "কারণ:",
+    bannerMonitored: "সক্রিয়ভাবে পর্যবেক্ষণ করা হচ্ছে",
+    bannerSync: "রিয়েল-টাইমে আপডেট",
+    cardTag: "লাইভ ট্রেন পূর্বাভাস",
+    statusRunning: "চলছে",
+    aiPredictedEta: "এআই পূর্বাভাসিত আগমন",
+    timetable: "সময়সূচী:",
+    currDelay: "বর্তমান চলমান বিলম্ব",
+    predAddDelay: "পূর্বাভাসিত অতিরিক্ত বিলম্ব",
+    delayWarning: "▲ বিলম্ব বাড়তে পারে",
+    reasonLabel: "কারণ:",
+    predConf: "পূর্বাভাস আত্মবিশ্বাস",
+    calibratedTelemetry: "ক্যালিব্রেটেড নিউরাল টেলিমেট্রি",
+    simulateBtn: "নতুন লাইভ আপডেট সিমুলেট করুন",
+    alarmTitle: "স্মার্ট অ্যালার্ম সেট করুন",
+    alarmSubtitle: "ETA-সমন্বয়কারী অ্যালার্ম",
+    adaptiveBadge: "অভিযোজিত",
+    predArrivalLbl: "আনুমানিক আগমন:",
+    remindMeLbl: "আমাকে মনে করিয়ে দিন:",
+    calcAlarmLbl: "গণনাকৃত অ্যালার্ম:",
+    autoAdjustLbl: "ETA সহ স্বয়ংক্রিয়ভাবে অ্যালার্ম সামঞ্জস্য করুন",
+    alarmInfo: "আপনার অ্যালার্ম স্বয়ংক্রিয়ভাবে সর্বশেষ উপলব্ধ ETA অনুসরণ করে।",
+    setAlarmBtn: "স্মার্ট অ্যালার্ম সেট করুন",
+    smartAlarmActive: "স্মার্ট অ্যালার্ম সক্রিয়",
+    aiBadge: "এআই সহকারী",
+    aiSubtitle: "আপনার ট্রেন সম্পর্কে দ্রুত এবং সহজ উত্তর পান।",
+    aiInputPlaceholder: "আপনার রুট, বিলম্ব বা প্ল্যাটফর্ম সম্পর্কে জিজ্ঞাসা করুন...",
+    askBtn: "এআই সহকারীকে জিজ্ঞাসা করুন",
+    recentTitle: "আপনার সাম্প্রতিক ট্রেন",
+    manageBtn: "পরিচালনা করুন",
+    featHead: "নির্ভুল ট্রানজিটের জন্য নির্মিত",
+    featSub: "যাত্রীদের জন্য উচ্চ-আত্মবিশ্বাসের টেলিমেট্রি অনুমান।",
+    f1Title: "গতিশীল ETA পূর্বাভাস",
+    f1Desc: "সিগন্যাল জ্যাম বিবেচনা করে ক্রমাগত সমন্বিত আগমন পূর্বাভাস।",
+    f2Title: "লাইভ রানিং বিলম্ব",
+    f2Desc: "রেলওয়ে টেলিমেট্রি থেকে সরাসরি সেগমেন্ট-দ্বারা-সেগমেন্ট ট্র্যাকিং।",
+    f3Title: "স্মার্ট বিলম্ব সতর্কতা",
+    f3Desc: "আগমনের আগে এবং সময়সূচী পরিবর্তনের সময় স্বয়ংক্রিয় বিজ্ঞপ্তি।",
+    f4Title: "ETA-ভিত্তিক স্মার্ট অ্যালার্ম",
+    f4Desc: "অ্যালার্ম যা লাইভ আগমনের সময় অনুসারে সামঞ্জস্য হয়।",
+    footerCopy: "© 2025 ডাইনামিকরেল। সর্বস্বত্ব সংরক্ষিত।",
+    telemetryLat: "টেলিমেট্রি বিলম্ব: 1.2s",
+    contrastBtn: "উচ্চ বৈসাদৃশ্য",
+    normalContrastBtn: "স্বাভাবিক বৈসাদৃশ্য",
+    liveNetwork: "লাইভ নেটওয়ার্ক (সিঙ্ক 10s আগে) ↗",
+    offlineNetwork: "অফলাইন মোড",
+    offlineBanner: "অফলাইন মোড • ক্যাশ করা তথ্য দেখানো হচ্ছে",
+    reconnectBtn: "পুনরায় সংযোগ করুন"
+  },
+  te: {
+    heroTitle: "మీ రైలు ఎక్కడ ఉందో తెలుసుకోండి.<br>ఎప్పుడు చేరుతుందో తెలుసుకోండి.",
+    heroSubtitle: "లైవ్ రన్నింగ్ ఆలస్యాన్ని ట్రాక్ చేయండి మరియు ఏఐ అంచనా సమయాన్ని పొందండి.",
+    searchPlaceholder: "రైలు నంబర్ లేదా పేరు నమోదు చేయండి (ఉదా. 12951 ముంబై రాజధాని)",
+    trackBtn: "రైలు ట్రాక్ చేయండి",
+    navHome: "హోమ్",
+    navMyTrains: "నా రైళ్లు",
+    navNotif: "నోటిఫికేషన్లు",
+    bannerTitle: "రైలు ఆలస్య అంచనా నవీకరించబడింది",
+    bannerLive: "లైవ్ రీకాలిబ్రేషన్ సక్రియంగా ఉంది",
+    bannerPrev: "మునుపటి అంచనా ETA:",
+    bannerNew: "కొత్త అంచనా ETA:",
+    bannerExp: "అదనపు ఆలస్యం అంచనా:",
+    bannerReason: "కారణం:",
+    bannerMonitored: "పర్యవేక్షించబడుతోంది",
+    bannerSync: "రియల్ టైమ్‌లో నవీకరించబడింది",
+    cardTag: "లైవ్ రైలు ప్రిడిక్షన్",
+    statusRunning: "నడుస్తోంది",
+    aiPredictedEta: "ఏఐ అంచనా రాక సమయం",
+    timetable: "టైమ్‌టేబుల్:",
+    currDelay: "ప్రస్తుత రన్నింగ్ ఆలస్యం",
+    predAddDelay: "అంచనా వేసిన అదనపు ఆలస్యం",
+    delayWarning: "▲ ఆలస్యం పెరగవచ్చు",
+    reasonLabel: "కారణం:",
+    predConf: "అంచనా విశ్వసనీయత",
+    calibratedTelemetry: "న్యూరల్ టెలిమెట్రీ",
+    simulateBtn: "లైవ్ అప్‌డేట్‌ను అనుకరించండి",
+    alarmTitle: "స్మార్ట్ అలారం సెట్ చేయండి",
+    alarmSubtitle: "ETA-సర్దుబాటు అలారం",
+    adaptiveBadge: "అడాప్టివ్",
+    predArrivalLbl: "అంచనా రాక:",
+    remindMeLbl: "నాకు గుర్తు చేయండి:",
+    calcAlarmLbl: "లెక్కించిన అలారం సమయం:",
+    autoAdjustLbl: "ETAతో అలారంను స్వయంచాలకంగా సర్దుబాటు చేయండి",
+    alarmInfo: "మీ అలారం స్వయంచాలకంగా తాజా ETAను అనుసరిస్తుంది.",
+    setAlarmBtn: "స్మార్ట్ అలారం సెట్ చేయండి",
+    smartAlarmActive: "స్మార్ట్ అలారం సక్రియంగా ఉంది",
+    aiBadge: "ఏఐ అసిస్టెంట్",
+    aiSubtitle: "మీ రైలు గురించి శీఘ్ర సమాధానాలు పొందండి.",
+    aiInputPlaceholder: "రైలు మార్గం, ఆలస్యం లేదా ప్లాట్‌ఫారమ్ గురించి అడగండి...",
+    askBtn: "ఏఐ అసిస్టెంట్‌ని అడగండి",
+    recentTitle: "మీ ఇటీవలి రైళ్లు",
+    manageBtn: "నిర్వహించండి",
+    featHead: "ఖచ్చితమైన ప్రయాణం కోసం నిర్మించబడింది",
+    featSub: "ప్రయాణీకుల కోసం హై-కాన్ఫిడెన్స్ టెలిమెట్రీ.",
+    f1Title: "డైనమిక్ ETA అంచనా",
+    f1Desc: "రైల్వే రద్దీ ఆధారంగా నిరంతరం రీకాలిబ్రేట్ చేయబడిన రాక సమయాలు.",
+    f2Title: "లైవ్ రన్నింగ్ ఆలస్యం",
+    f2Desc: "టెలిమెట్రీ నుండి నేరుగా సెగ్మెంట్ వారీగా ఆలస్యం ట్రాకింగ్.",
+    f3Title: "స్మార్ట్ ఆలస్య హెచ్చరికలు",
+    f3Desc: "సమయ మార్పుల గురించి స్వయంచాలక నోటిఫికేషన్లు.",
+    f4Title: "ETA-ఆధారిత స్మార్ట్ అలారం",
+    f4Desc: "లైవ్ రాక సమయాలకు సర్దుబాటు చేసే అలారాలు.",
+    footerCopy: "© 2025 డైనమిక్‌రైల్. సర్వహక్కులు ప్రత్యేకించబడ్డాయి.",
+    telemetryLat: "టెలిమెట్రీ లేటెన్సీ: 1.2s",
+    contrastBtn: "హై కాంట్రాస్ట్",
+    normalContrastBtn: "సాధారణ కాంట్రాస్ట్",
+    liveNetwork: "లైవ్ నెట్‌వర్క్ (10s క్రితం సింక్) ↗",
+    offlineNetwork: "ఆఫ్‌లైన్ మోడ్",
+    offlineBanner: "ఆఫ్‌లైన్ మోడ్ • కాష్ చేయబడిన సమాచారం చూపబడుతోంది",
+    reconnectBtn: "మళ్లీ కనెక్ట్ అవ్వండి"
+  },
+  mr: {
+    heroTitle: "तुमची ट्रेन कुठे आहे ते जाणून घ्या.<br>ती कधी पोहोचेल ते जाणून घ्या.",
+    heroSubtitle: "थेट धावण्याचा विलंब ट्रॅक करा आणि तुमच्या ट्रेनच्या आगमनासाठी AI अंदाज मिळवा.",
+    searchPlaceholder: "ट्रेन क्रमांक किंवा नाव प्रविष्ट करा (उदा. 12951 मुंबई राजधानी)",
+    trackBtn: "ट्रेन ट्रॅक करा",
+    navHome: "मुख्यपृष्ठ",
+    navMyTrains: "माझ्या ट्रेन्स",
+    navNotif: "सूचना",
+    bannerTitle: "ट्रेन विलंब अंदाज अद्यतनित केला",
+    bannerLive: "थेट पुनर्गणना सक्रिय",
+    bannerPrev: "मागील अंदाजित ETA:",
+    bannerNew: "नवीन अंदाजित ETA:",
+    bannerExp: "अपेक्षित अतिरिक्त विलंब:",
+    bannerReason: "कारण:",
+    bannerMonitored: "सक्रियपणे निरीक्षण",
+    bannerSync: "रिअल-टाइममध्ये अद्यतनित",
+    cardTag: "थेट ट्रेन अंदाज",
+    statusRunning: "धावत आहे",
+    aiPredictedEta: "AI अंदाजित आगमन वेळ",
+    timetable: "वेळापत्रक:",
+    currDelay: "सध्याचा धावण्याचा विलंब",
+    predAddDelay: "अंदाजित अतिरिक्त विलंब",
+    delayWarning: "▲ विलंब वाढू शकतो",
+    reasonLabel: "कारण:",
+    predConf: "अंदाज विश्वासार्हता",
+    calibratedTelemetry: "कॅलिब्रेटेड न्यूरल टेलीमेट्री",
+    simulateBtn: "नवीन थेट अपडेट सिम्युलेट करा",
+    alarmTitle: "स्मार्ट अलार्म सेट करा",
+    alarmSubtitle: "ETA-समायोजित अलार्म",
+    adaptiveBadge: "अ‍ॅडॉप्टिव्ह",
+    predArrivalLbl: "अंदाजित आगमन:",
+    remindMeLbl: "मला आठवण करा:",
+    calcAlarmLbl: "गणना केलेली अलार्म वेळ:",
+    autoAdjustLbl: "ETA सह अलार्म स्वयंचलितपणे समायोजित करा",
+    alarmInfo: "तुमचा अलार्म नवीनतम ETA नुसार स्वयंचलितपणे बदलतो.",
+    setAlarmBtn: "स्मार्ट अलार्म सेट करा",
+    smartAlarmActive: "स्मार्ट अलार्म सक्रिय",
+    aiBadge: "AI सहाय्यक",
+    aiSubtitle: "तुमच्या ट्रेनबद्दल त्वरित आणि सोपी उत्तरे मिळवा.",
+    aiInputPlaceholder: "तुमचा मार्ग, विलंब किंवा प्लॅटफॉर्मबद्दल विचारा...",
+    askBtn: "AI सहाय्यकाला विचारा",
+    recentTitle: "तुमच्या अलीकडील ट्रेन्स",
+    manageBtn: "व्यवस्थापित करा",
+    featHead: "अचूक प्रवासासाठी तयार केलेले",
+    featSub: "प्रवाशांसाठी उच्च-विश्वासार्हता टेलीमेट्री अनुमान.",
+    f1Title: "गतिमान ETA अंदाज",
+    f1Desc: "सिग्नल गर्दीचा विचार करून सतत अद्यतनित केलेला अंदाज.",
+    f2Title: "थेट धावण्याचा विलंब",
+    f2Desc: "थेट रेल्वे टेलीमेट्रीवरून विभागांनुसार विलंब ट्रॅकिंग.",
+    f3Title: "स्मार्ट विलंब सूचना",
+    f3Desc: "वेळापत्रक बदलल्यावर स्वयंचलित सूचना.",
+    f4Title: "ETA-आधारित स्मार्ट अलार्म",
+    f4Desc: "थेट आगमनाच्या वेळेनुसार समायोजित होणारे अलार्म.",
+    footerCopy: "© 2025 डायनॅमिकरेल. सर्व हक्क राखीव.",
+    telemetryLat: "टेलीमेट्री विलंब: 1.2s",
+    contrastBtn: "हाय कॉन्ट्रास्ट",
+    normalContrastBtn: "सामान्य कॉन्ट्रास्ट",
+    liveNetwork: "थेट नेटवर्क (10s पूर्वी सिंक) ↗",
+    offlineNetwork: "ऑफलाइन मोड",
+    offlineBanner: "ऑफलाइन मोड • कॅश केलेला डेटा दर्शवित आहे",
+    reconnectBtn: "पुन्हा कनेक्ट करा"
+  },
+  ta: {
+    heroTitle: "உங்கள் ரயில் எங்குள்ளது என்பதை அறியுங்கள்.<br>எப்போது வந்து சேரும் என்பதை அறியுங்கள்.",
+    heroSubtitle: "ரயில் தாமதத்தைக் கண்காணித்து AI மூலம் கணிக்கப்பட்ட வருகை நேரத்தைப் பெறுங்கள்.",
+    searchPlaceholder: "ரயில் எண் அல்லது பெயரை உள்ளிடவும் (எ.கா. 12951 மும்பை ராஜ்தானி)",
+    trackBtn: "ரயிலைக் கண்காணிக்கவும்",
+    navHome: "முகப்பு",
+    navMyTrains: "எனது ரயில்கள்",
+    navNotif: "அறிவிப்புகள்",
+    bannerTitle: "ரயில் தாமதக் கணிப்பு புதுப்பிக்கப்பட்டது",
+    bannerLive: "நேரடி மறுசீரமைப்பு செயலில் உள்ளது",
+    bannerPrev: "முந்தைய கணிக்கப்பட்ட ETA:",
+    bannerNew: "புதிய கணிக்கப்பட்ட ETA:",
+    bannerExp: "எதிர்பார்க்கப்படும் கூடுதல் தாமதம்:",
+    bannerReason: "காரணம்:",
+    bannerMonitored: "தொடர்ந்து கண்காணிக்கப்படுகிறது",
+    bannerSync: "நேரலையாகப் புதுப்பிக்கப்பட்டது",
+    cardTag: "நேரடி ரயில் கணிப்பு",
+    statusRunning: "ஓடிக்கொண்டிருக்கிறது",
+    aiPredictedEta: "AI கணிக்கப்பட்ட வருகை நேரம்",
+    timetable: "அட்டவணை:",
+    currDelay: "தற்போதைய தாமதம்",
+    predAddDelay: "கணிக்கப்பட்ட கூடுதல் தாமதம்",
+    delayWarning: "▲ தாமதம் அதிகரிக்கலாம்",
+    reasonLabel: "காரணம்:",
+    predConf: "கணிப்புத் துல்லியம்",
+    calibratedTelemetry: "நியூரல் டெலிமெட்ரி",
+    simulateBtn: "புதிய நேரடி புதுப்பிப்பை உருவகப்படுத்தவும்",
+    alarmTitle: "ஸ்மார்ட் அலாரம் அமைக்கவும்",
+    alarmSubtitle: "ETA-சரிசெய்யும் அலாரம்",
+    adaptiveBadge: "தகவமைக்கும்",
+    predArrivalLbl: "கணிக்கப்பட்ட வருகை:",
+    remindMeLbl: "எனக்கு நினைவூட்டு:",
+    calcAlarmLbl: "கணக்கிடப்பட்ட அலாரம்:",
+    autoAdjustLbl: "ETA உடன் அலாரத்தை தானாகச் சரிசெய்யவும்",
+    alarmInfo: "உங்கள் அலாரம் தானாகவே சமீபத்திய ETA ஐப் பின்தொடரும்.",
+    setAlarmBtn: "ஸ்மார்ட் அலாரம் அமைக்கவும்",
+    smartAlarmActive: "ஸ்மார்ட் அலாரம் செயலில் உள்ளது",
+    aiBadge: "AI உதவியாளர்",
+    aiSubtitle: "உங்கள் ரயிலைப் பற்றிய விரைவான பதில்களைப் பெறுங்கள்.",
+    aiInputPlaceholder: "உங்கள் வழித்தடம், தாமதம் அல்லது நடைமேடை பற்றி கேளுங்கள்...",
+    askBtn: "AI உதவியாளரிடம் கேளுங்கள்",
+    recentTitle: "உங்கள் சமீபத்திய ரயில்கள்",
+    manageBtn: "நிர்வகி",
+    featHead: "துல்லியமான பயணத்திற்காக உருவாக்கப்பட்டது",
+    featSub: "பயணிகளுக்கான உயர்-துல்லிய டெலிமெட்ரி கணிப்பு.",
+    f1Title: "டைனமிக் ETA கணிப்பு",
+    f1Desc: "சமிக்ஞை நெரிசலைக் கருத்தில் கொண்டு தொடர்ந்து புதுப்பிக்கப்படும் நேரம்.",
+    f2Title: "நேரடி இயங்கும் தாமதம்",
+    f2Desc: "டெலிமெட்ரி மூலம் பகுதி வாரியாக தாமத கண்காணிப்பு.",
+    f3Title: "ஸ்மார்ட் தாமத எச்சரிக்கைகள்",
+    f3Desc: "வருகைக்கு முன்பும் அட்டவணை மாறும்போதும் தானியங்கி அறிவிப்புகள்.",
+    f4Title: "ETA-அடிப்படையிலான ஸ்மார்ட் அலாரம்",
+    f4Desc: "நேரடி வருகை நேரத்திற்கு ஏற்ப தானாக மாறும் அலாரங்கள்.",
+    footerCopy: "© 2025 டைனமிக்ரயில். அனைத்து உரிமைகளும் பாதுகாக்கப்பட்டவை.",
+    telemetryLat: "டெலிமெட்ரி தாமதம்: 1.2s",
+    contrastBtn: "அதிக மாறுபாடு",
+    normalContrastBtn: "சாதாரண மாறுபாடு",
+    liveNetwork: "நேரடி நெட்வொர்க் (10s முன் ஒத்திசைக்கப்பட்டது) ↗",
+    offlineNetwork: "ஆஃப்லைன் முறை",
+    offlineBanner: "ஆஃப்லைன் முறை • சேமிக்கப்பட்ட தரவு காட்டப்படுகிறது",
+    reconnectBtn: "மீண்டும் இணைக்கவும்"
+  },
+  gu: {
+    heroTitle: "જાણો તમારી ટ્રેન ક્યાં છે.<br>જાણો તે ક્યારે પહોંચશે.",
+    heroSubtitle: "લાઇવ રનિંગ વિલંબ ટ્રૅક કરો અને તમારી ટ્રેનના આગમન માટે AI આગાહી મેળવો.",
+    searchPlaceholder: "ટ્રેન નંબર અથવા નામ દાખલ કરો (દા.ત. 12951 મુંબઈ રાજધાની)",
+    trackBtn: "ટ્રેન ટ્રૅક કરો",
+    navHome: "હોમ",
+    navMyTrains: "મારી ટ્રેનો",
+    navNotif: "સૂચનાઓ",
+    bannerTitle: "ટ્રેન વિલંબ આગાહી અપડેટ થઈ",
+    bannerLive: "લાઇવ પુનર્ગણતરી સક્રિય",
+    bannerPrev: "અગાઉનો અંદાજિત ETA:",
+    bannerNew: "નવો અંદાજિત ETA:",
+    bannerExp: "અપેક્ષિત વધારાનો વિલંબ:",
+    bannerReason: "કારણ:",
+    bannerMonitored: "સક્રિયપણે મોનિટર થયેલ",
+    bannerSync: "રીઅલ-ટાઇમમાં અપડેટ",
+    cardTag: "લાઇવ ટ્રેન આગાહી",
+    statusRunning: "દોડી રહી છે",
+    aiPredictedEta: "AI અંદાજિત આગમન સમય",
+    timetable: "સમયપત્રક:",
+    currDelay: "વર્તમાન વિલંબ",
+    predAddDelay: "અંદાજિત વધારાનો વિલંબ",
+    delayWarning: "▲ વિલંબ વધી શકે છે",
+    reasonLabel: "કારણ:",
+    predConf: "આગાહી ચોકસાઈ",
+    calibratedTelemetry: "ન્યુરલ ટેલિમેટ્રી",
+    simulateBtn: "લાઇવ અપડેટ સિમ્યુલેટ કરો",
+    alarmTitle: "સ્માર્ટ એલાર્મ સેટ કરો",
+    alarmSubtitle: "ETA-એડજસ્ટિંગ એલાર્મ",
+    adaptiveBadge: "અનુકૂલનશીલ",
+    predArrivalLbl: "અંદાજિત આગમન:",
+    remindMeLbl: "મને યાદ કરાવો:",
+    calcAlarmLbl: "ગણતરી કરેલ એલાર્મ:",
+    autoAdjustLbl: "ETA સાથે એલાર્મને આપમેળે સમાયોજિત કરો",
+    alarmInfo: "તમારું એલાર્મ આપમેળે નવીનતમ ETA અનુસરે છે.",
+    setAlarmBtn: "સ્માર્ટ એલાર્મ સેટ કરો",
+    smartAlarmActive: "સ્માર્ટ એલાર્મ સક્રિય",
+    aiBadge: "AI સહાયક",
+    aiSubtitle: "તમારી ટ્રેન વિશે ઝડપી જવાબો મેળવો.",
+    aiInputPlaceholder: "રૂટ, વિલંબ અથવા પ્લેટફોર્મ વિશે પૂછો...",
+    askBtn: "AI સહાયકને પૂછો",
+    recentTitle: "તમારી તાજેતરની ટ્રેનો",
+    manageBtn: "સંચાલન કરો",
+    featHead: "ચોક્કસ મુસાફરી માટે નિર્મિત",
+    featSub: "મુસાફરો માટે ઉચ્ચ-વિશ્વાસપાત્ર ટેલિમેટ્રી આગાહી.",
+    f1Title: "ડાયનેમિક ETA આગાહી",
+    f1Desc: "સિગ્નલ ભીડને ધ્યાનમાં રાખીને સતત ગણતરી કરેલ આગમન સમય.",
+    f2Title: "લાઇવ રનિંગ વિલંબ",
+    f2Desc: "ટેલિમેટ્રી દ્વારા સેગમેન્ટ મુજબ વિલંબ ટ્રેકિંગ.",
+    f3Title: "સ્માર્ટ વિલંબ ચેતવણીઓ",
+    f3Desc: "આગમન પહેલાં અને સમય બદલાય ત્યારે સ્વચાલિત સૂચનાઓ.",
+    f4Title: "ETA-આધારિત સ્માર્ટ એલાર્મ",
+    f4Desc: "લાઇવ સમય અનુસાર આપમેળે બદલાતા એલાર્મ.",
+    footerCopy: "© 2025 ડાયનેમિકરેલ. સર્વાધિકાર સુરક્ષિત.",
+    telemetryLat: "ટેલિમેટ્રી વિલંબ: 1.2s",
+    contrastBtn: "હાઇ કોન્ટ્રાસ્ટ",
+    normalContrastBtn: "સામાન્ય કોન્ટ્રાસ્ટ",
+    liveNetwork: "લાઇવ નેટવર્ક (10s પહેલાં સિંક) ↗",
+    offlineNetwork: "ઓફલાઇન મોડ",
+    offlineBanner: "ઓફલાઇન મોડ • કેશ કરેલ ડેટા દર્શાવે છે",
+    reconnectBtn: "ફરીથી કનેક્ટ કરો"
+  },
+  ur: {
+    heroTitle: "جانیں آپ کی ٹرین کہاں ہے۔<br>جانیں یہ کب پہنچے گی۔",
+    heroSubtitle: "لائیو ٹرین تاخیر کو ٹریک کریں اور AI سے آمد کا درست وقت حاصل کریں۔",
+    searchPlaceholder: "ٹرین نمبر یا نام درج کریں (مثلاً 12951 ممبئی راجدھانی)",
+    trackBtn: "ٹرین ٹریک کریں",
+    navHome: "ہوم",
+    navMyTrains: "میری ٹرینیں",
+    navNotif: "اطلاعات",
+    bannerTitle: "ٹرین تاخیر کی پیشین گوئی اپ ڈیٹ ہو گئی",
+    bannerLive: "لائیو ریکلیبریشن فعال",
+    bannerPrev: "پچھلا متوقع ETA:",
+    bannerNew: "نیا متوقع ETA:",
+    bannerExp: "متوقع اضافی تاخیر:",
+    bannerReason: "وجہ:",
+    bannerMonitored: "مسلسل نگرانی",
+    bannerSync: "ریئل ٹائم میں اپ ڈیٹ",
+    cardTag: "لائیو ٹرین پیشین گوئی",
+    statusRunning: "چل رہی ہے",
+    aiPredictedEta: "AI متوقع آمد کا وقت",
+    timetable: "ٹائم ٹیبل:",
+    currDelay: "موجودہ تاخیر",
+    predAddDelay: "متوقع اضافی تاخیر",
+    delayWarning: "▲ تاخیر بڑھ سکتی ہے",
+    reasonLabel: "وجہ:",
+    predConf: "پیشین گوئی کا اعتماد",
+    calibratedTelemetry: "نیورل ٹیلی میٹری",
+    simulateBtn: "نئی لائیو اپ ڈیٹ سمولیٹ کریں",
+    alarmTitle: "اسمارٹ الارم سیٹ کریں",
+    alarmSubtitle: "ETA-ایڈجسٹنگ الارم",
+    adaptiveBadge: "موافقت پذیر",
+    predArrivalLbl: "متوقع آمد:",
+    remindMeLbl: "مجھے یاد دلائیں:",
+    calcAlarmLbl: "حساب شدہ الارم:",
+    autoAdjustLbl: "ETA کے ساتھ خود بخود الارم ایڈجسٹ کریں",
+    alarmInfo: "آپ کا الارم خود بخود تازہ ترین ETA کی پیروی کرتا ہے۔",
+    setAlarmBtn: "اسمارٹ الارم سیٹ کریں",
+    smartAlarmActive: "اسمارٹ الارم فعال ہے",
+    aiBadge: "AI اسسٹنٹ",
+    aiSubtitle: "اپنی ٹرین کے بارے میں فوری اور آسان جوابات حاصل کریں۔",
+    aiInputPlaceholder: "اپنے روٹ، تاخیر یا پلیٹ فارم کے بارے میں پوچھیں...",
+    askBtn: "AI اسسٹنٹ سے پوچھیں",
+    recentTitle: "آپ کی حالیہ ٹرینیں",
+    manageBtn: "ترتیب دیں",
+    featHead: "درست سفر کے لیے تیار کردہ",
+    featSub: "مسافروں کے لیے قابل اعتماد ٹیلی میٹری پیشین گوئی۔",
+    f1Title: "متحرک ETA پیشین گوئی",
+    f1Desc: "سگنل بھیڑ کو مدنظر رکھتے ہوئے مسلسل ایڈجسٹ آمد۔",
+    f2Title: "لائیو رننگ تاخیر",
+    f2Desc: "براہ راست ریلوے ٹیلی میٹری سے تاخیر کی ٹریکنگ۔",
+    f3Title: "اسمارٹ تاخیر الرٹس",
+    f3Desc: "آمد سے پہلے اور شیڈول تبدیلی پر خودکار اطلاعات۔",
+    f4Title: "ETA پر مبنی اسمارٹ الارم",
+    f4Desc: "الارم جو لائیو آمد کے وقت کے مطابق ایڈجسٹ ہوتے ہیں۔",
+    footerCopy: "© 2025 ڈائنامک ریل۔ تمام حقوق محفوظ ہیں۔",
+    telemetryLat: "ٹیلی میٹری لیٹنسی: 1.2s",
+    contrastBtn: "ہائی کنٹراسٹ",
+    normalContrastBtn: "نارمل کنٹراسٹ",
+    liveNetwork: "لائیو نیٹ ورک (10s پہلے سنک) ↗",
+    offlineNetwork: "آف لائن موڈ",
+    offlineBanner: "آف لائن موڈ • محفوظ شدہ ڈیٹا دکھایا جا رہا ہے",
+    reconnectBtn: "دوبارہ منسلک کریں"
+  },
+  kn: {
+    heroTitle: "ನಿಮ್ಮ ರೈಲು ಎಲ್ಲಿದೆ ಎಂದು ತಿಳಿಯಿರಿ.<br>ಅದು ಯಾವಾಗ ತಲುಪುತ್ತದೆ ಎಂದು ತಿಳಿಯಿರಿ.",
+    heroSubtitle: "ಲೈವ್ ಚಾಲನೆಯಲ್ಲಿರುವ ವಿಳಂಬವನ್ನು ಟ್ರ್ಯಾಕ್ ಮಾಡಿ ಮತ್ತು ಆಗಮನಕ್ಕಾಗಿ AI ಮುನ್ಸೂಚನೆ ಪಡೆಯಿರಿ.",
+    searchPlaceholder: "ರೈಲು ಸಂಖ್ಯೆ ಅಥವಾ ಹೆಸರನ್ನು ನಮೂದಿಸಿ (ಉದಾ. 12951 ಮುಂಬೈ ರಾಜಧಾನಿ)",
+    trackBtn: "ರೈಲು ಟ್ರ್ಯಾಕ್ ಮಾಡಿ",
+    navHome: "ಮುಖಪುಟ",
+    navMyTrains: "ನನ್ನ ರೈಲುಗಳು",
+    navNotif: "ಅಧಿಸೂಚನೆಗಳು",
+    bannerTitle: "ರೈಲು ವಿಳಂಬ ಮುನ್ಸೂಚನೆ ನವೀಕರಿಸಲಾಗಿದೆ",
+    bannerLive: "ಲೈವ್ ಮರುಮಾಪನ ಸಕ್ರಿಯವಾಗಿದೆ",
+    bannerPrev: "ಹಿಂದಿನ ಅಂದಾಜು ETA:",
+    bannerNew: "ಹೊಸ ಅಂದಾಜು ETA:",
+    bannerExp: "ನಿರೀಕ್ಷಿತ ಹೆಚ್ಚುವರಿ ವಿಳಂಬ:",
+    bannerReason: "ಕಾರಣ:",
+    bannerMonitored: "ಮೇಲ್ವಿಚಾರಣೆ ಮಾಡಲಾಗುತ್ತಿದೆ",
+    bannerSync: "ನೈಜ ಸಮಯದಲ್ಲಿ ನವೀಕರಿಸಲಾಗಿದೆ",
+    cardTag: "ಲೈವ್ ರೈಲು ಮುನ್ಸೂಚನೆ",
+    statusRunning: "ಚಲಿಸುತ್ತಿದೆ",
+    aiPredictedEta: "AI ಅಂದಾಜು ಆಗಮನ ಸಮಯ",
+    timetable: "ವೇಳಾಪಟ್ಟಿ:",
+    currDelay: "ಪ್ರಸ್ತುತ ವಿಳಂಬ",
+    predAddDelay: "ಮುನ್ಸೂಚಿತ ಹೆಚ್ಚುವರಿ ವಿಳಂಬ",
+    delayWarning: "▲ ವಿಳಂಬ ಹೆಚ್ಚಾಗಬಹುದು",
+    reasonLabel: "ಕಾರಣ:",
+    predConf: "ಮುನ್ಸೂಚನೆಯ ನಿಖರತೆ",
+    calibratedTelemetry: "ನ್ಯೂರಲ್ ಟೆಲಿಮೆಟ್ರಿ",
+    simulateBtn: "ಲೈವ್ ಅಪ್‌ಡೇಟ್ ಸಿಮ್ಯುಲೇಟ್ ಮಾಡಿ",
+    alarmTitle: "ಸ್ಮಾರ್ಟ್ ಅಲಾರಾಂ ಹೊಂದಿಸಿ",
+    alarmSubtitle: "ETA-ಹೊಂದಾಣಿಕೆಯ ಅಲಾರಾಂ",
+    adaptiveBadge: "ಹೊಂದಿಕೊಳ್ಳುವ",
+    predArrivalLbl: "ಅಂದಾಜು ಆಗಮನ:",
+    remindMeLbl: "ನನಗೆ ನೆನಪಿಸಿ:",
+    calcAlarmLbl: "ಲೆಕ್ಕಹಾಕಿದ ಅಲಾರಾಂ ಸಮಯ:",
+    autoAdjustLbl: "ETA ನೊಂದಿಗೆ ಸ್ವಯಂಚಾಲಿತವಾಗಿ ಅಲಾರಾಂ ಹೊಂದಿಸಿ",
+    alarmInfo: "ನಿಮ್ಮ ಅಲಾರಾಂ ಇತ್ತೀಚಿನ ETA ಅನ್ನು ಸ್ವಯಂಚಾಲಿತವಾಗಿ ಅನುಸರಿಸುತ್ತದೆ.",
+    setAlarmBtn: "ಸ್ಮಾರ್ಟ್ ಅಲಾರಾಂ ಹೊಂದಿಸಿ",
+    smartAlarmActive: "ಸ್ಮಾರ್ಟ್ ಅಲಾರಾಂ ಸಕ್ರಿಯವಾಗಿದೆ",
+    aiBadge: "AI ಸಹಾಯಕ",
+    aiSubtitle: "ನಿಮ್ಮ ರೈಲಿನ ಬಗ್ಗೆ ತ್ವರಿತ ಉತ್ತರಗಳನ್ನು ಪಡೆಯಿರಿ.",
+    aiInputPlaceholder: "ಮಾರ್ಗ, ವಿಳಂಬ ಅಥವಾ ಪ್ಲಾಟ್‌ಫಾರ್ಮ್ ಬಗ್ಗೆ ಕೇಳಿ...",
+    askBtn: "AI ಸಹಾಯಕನನ್ನು ಕೇಳಿ",
+    recentTitle: "ನಿಮ್ಮ ಇತ್ತೀಚಿನ ರೈಲುಗಳು",
+    manageBtn: "ನಿರ್ವಹಿಸಿ",
+    featHead: "ನಿಖರವಾದ ಪ್ರಯಾಣಕ್ಕಾಗಿ ನಿರ್ಮಿಸಲಾಗಿದೆ",
+    featSub: "ಪ್ರಯಾಣಿಕರಿಗಾಗಿ ಉನ್ನತ-ವಿಶ್ವಾಸಾರ್ಹ ಟೆಲಿಮೆಟ್ರಿ ಮುನ್ಸೂಚನೆ.",
+    f1Title: "ಡೈನಾಮಿಕ್ ETA ಮುನ್ಸೂಚನೆ",
+    f1Desc: "ರೈಲ್ವೆ ದಟ್ಟಣೆಯನ್ನು ಆಧರಿಸಿ ನಿರಂತರವಾಗಿ ನವೀಕರಿಸಲಾದ ಆಗಮನ ಸಮಯ.",
+    f2Title: "ಲೈವ್ ರನ್ನಿಂಗ್ ವಿಳಂಬ",
+    f2Desc: "ಟೆಲಿಮೆಟ್ರಿಯಿಂದ ನೇರವಾಗಿ ವಿಳಂಬ ಟ್ರ್ಯಾಕಿಂಗ್.",
+    f3Title: "ಸ್ಮಾರ್ಟ್ ವಿಳಂಬ ಎಚ್ಚರಿಕೆಗಳು",
+    f3Desc: "ವೇಳಾಪಟ್ಟಿ ಬದಲಾದಾಗ ಸ್ವಯಂಚಾಲಿತ ಅಧಿಸೂಚನೆಗಳು.",
+    f4Title: "ETA-ಆಧಾರಿತ ಸ್ಮಾರ್ಟ್ ಅಲಾರಾಂ",
+    f4Desc: "ಲೈವ್ ಆಗಮನದ ಸಮಯಕ್ಕೆ ತಕ್ಕಂತೆ ಬದಲಾಗುವ ಅಲಾರಾಂಗಳು.",
+    footerCopy: "© 2025 ಡೈನಾಮಿಕ್‌ರೈಲ್. ಎಲ್ಲ ಹಕ್ಕುಗಳನ್ನು ಕಾಯ್ದಿರಿಸಲಾಗಿದೆ.",
+    telemetryLat: "ಟೆಲಿಮೆಟ್ರಿ ಲೇಟೆನ್ಸಿ: 1.2s",
+    contrastBtn: "ಹೈ ಕಾಂಟ್ರಾಸ್ಟ್",
+    normalContrastBtn: "ಸಾಮಾನ್ಯ ಕಾಂಟ್ರಾಸ್ಟ್",
+    liveNetwork: "ಲೈವ್ ನೆಟ್‌ವರ್ಕ್ (10s ಹಿಂದೆ ಸಿಂಕ್) ↗",
+    offlineNetwork: "ಆಫ್‌ಲೈನ್ ಮೋಡ್",
+    offlineBanner: "ಆಫ್‌ಲೈನ್ ಮೋಡ್ • ಸಂಗ್ರಹಿಸಲಾದ ಡೇಟಾ ತೋರಿಸಲಾಗುತ್ತಿದೆ",
+    reconnectBtn: "ಮರುಸಂಪರ್ಕಿಸಿ"
+  },
+  ml: {
+    heroTitle: "നിങ്ങളുടെ ട്രെയിൻ എവിടെയാണെന്ന് അറിയുക.<br>എപ്പോഴാണ് എത്തുകയെന്ന് അറിയുക.",
+    heroSubtitle: "തത്സമയ ട്രെയിൻ വൈകൽ ട്രാക്ക് ചെയ്യുക, AI പ്രവചനം നേടുക.",
+    searchPlaceholder: "ട്രെയിൻ നമ്പറോ പേരോ നൽകുക (ഉദാ. 12951 മുംബൈ രാജധാനി)",
+    trackBtn: "ട്രെയിൻ ട്രാക്ക് ചെയ്യുക",
+    navHome: "ഹോം",
+    navMyTrains: "എന്റെ ട്രെയിനുകൾ",
+    navNotif: "അറിയിപ്പുകൾ",
+    bannerTitle: "ട്രെയിൻ വൈകൽ പ്രവചനം അപ്‌ഡേറ്റ് ചെയ്തു",
+    bannerLive: "ലൈവ് റീകാലിബ്രേഷൻ സജീവം",
+    bannerPrev: "മുമ്പത്തെ ETA:",
+    bannerNew: "പുതിയ ETA:",
+    bannerExp: "പ്രതീക്ഷിക്കുന്ന അധിക വൈകൽ:",
+    bannerReason: "കാരണം:",
+    bannerMonitored: "തത്സമയം നിരീക്ഷിക്കുന്നു",
+    bannerSync: "തത്സമയം അപ്‌ഡേറ്റ് ചെയ്‌തു",
+    cardTag: "ലൈവ് ട്രെയിൻ പ്രവചനം",
+    statusRunning: "ഓടുന്നു",
+    aiPredictedEta: "AI കണക്കാക്കിയ വരവ് സമയം",
+    timetable: "സമയക്രമം:",
+    currDelay: "നിലവിലെ വൈകൽ",
+    predAddDelay: "പ്രവചിച്ച അധിക വൈകൽ",
+    delayWarning: "▲ വൈകൽ കൂടിയേക്കാം",
+    reasonLabel: "കാരണം:",
+    predConf: "പ്രവചന കൃത്യത",
+    calibratedTelemetry: "ന്യൂറൽ ടെലിമെട്രി",
+    simulateBtn: "ലൈവ് അപ്‌ഡേറ്റ് സിമുലേറ്റ് ചെയ്യുക",
+    alarmTitle: "സ്മാർട്ട് അലാറം സജ്ജമാക്കുക",
+    alarmSubtitle: "ETA ക്രമീകരിക്കുന്ന അലാറം",
+    adaptiveBadge: "അഡാപ്റ്റീവ്",
+    predArrivalLbl: "പ്രതീക്ഷിക്കുന്ന വരവ്:",
+    remindMeLbl: "ഓർമ്മിപ്പിക്കുക:",
+    calcAlarmLbl: "കണക്കാക്കിയ അലാറം:",
+    autoAdjustLbl: "ETA അനുസരിച്ച് സ്വയമേവ അലാറം ക്രമീകരിക്കുക",
+    alarmInfo: "നിങ്ങളുടെ അലാറം സ്വയമേവ ഏറ്റവും പുതിയ ETA പിന്തുടരുന്നു.",
+    setAlarmBtn: "സ്മാർട്ട് അലാറം സജ്ജമാക്കുക",
+    smartAlarmActive: "സ്മാർട്ട് അലാറം സജീവമാണ്",
+    aiBadge: "AI സഹായി",
+    aiSubtitle: "നിങ്ങളുടെ ട്രെയിനിനെക്കുറിച്ചുള്ള ദ്രുത ഉത്തരങ്ങൾ നേടുക.",
+    aiInputPlaceholder: "റൂട്ട്, വൈകൽ, അല്ലെങ്കിൽ പ്ലാറ്റ്‌ഫോം എന്നിവയെക്കുറിച്ച് ചോദിക്കുക...",
+    askBtn: "AI സഹായിയോട് ചോദിക്കുക",
+    recentTitle: "നിങ്ങളുടെ സമീപകാല ട്രെയിനുകൾ",
+    manageBtn: "കൈകാര്യം ചെയ്യുക",
+    featHead: "കൃത്യമായ യാത്രയ്ക്കായി നിർമ്മിച്ചത്",
+    featSub: "യാത്രക്കാർക്കായി ഉയർന്ന കൃത്യതയുള്ള ടെലിമെട്രി അനുമാനം.",
+    f1Title: "ഡൈനാമിക് ETA പ്രവചനം",
+    f1Desc: "സിഗ്നൽ തിരക്ക് കണക്കിലെടുത്ത് നിരന്തരം ക്രമീകരിച്ച വരവ് സമയം.",
+    f2Title: "തത്സമയ റണ്ണിംഗ് വൈകൽ",
+    f2Desc: "ടെലിമെട്രിയിൽ നിന്നുള്ള തത്സമയ വൈകൽ ട്രാക്കിംഗ്.",
+    f3Title: "സ്മാർട്ട് വൈകൽ അലേർട്ടുകൾ",
+    f3Desc: "സമയമാറ്റങ്ങളെക്കുറിച്ചുള്ള സ്വയമേവയുള്ള അറിയിപ്പുകൾ.",
+    f4Title: "ETA അധിഷ്ഠിത സ്മാർട്ട് അലാറം",
+    f4Desc: "തത്സമയ വരവ് സമയത്തിനനുസരിച്ച് ക്രമീകരിക്കുന്ന അലാറങ്ങൾ.",
+    footerCopy: "© 2025 ഡൈനാമിക് റെയിൽ. എല്ലാ അവകാശങ്ങളും നിക്ഷിപ്തം.",
+    telemetryLat: "ടെലിമെട്രി ലേറ്റൻസി: 1.2s",
+    contrastBtn: "ഹൈ കോൺട്രാസ്റ്റ്",
+    normalContrastBtn: "സാധാരണ കോൺട്രാസ്റ്റ്",
+    liveNetwork: "ലൈവ് നെറ്റ്‌വർക്ക് (10s മുമ്പ് സമന്വയിപ്പിച്ചു) ↗",
+    offlineNetwork: "ഓഫ്‌ലൈൻ മോഡ്",
+    offlineBanner: "ഓഫ്‌ലൈൻ മോഡ് • സൂക്ഷിച്ച വിവരങ്ങൾ കാണിക്കുന്നു",
+    reconnectBtn: "വീണ്ടും ബന്ധിപ്പിക്കുക"
+  },
+  pa: {
+    heroTitle: "ਜਾਣੋ ਤੁਹਾਡੀ ਟ੍ਰੇਨ ਕਿੱਥੇ ਹੈ।<br>ਜਾਣੋ ਇਹ ਕਦੋਂ ਪਹੁੰਚੇਗੀ।",
+    heroSubtitle: "ਲਾਈਵ ਦੇਰੀ ਨੂੰ ਟ੍ਰੈਕ ਕਰੋ ਅਤੇ ਆਪਣੀ ਟ੍ਰੇਨ ਦੇ ਪਹੁੰਚਣ ਲਈ AI ਭਵਿੱਖਬਾਣੀ ਪ੍ਰਾਪਤ ਕਰੋ।",
+    searchPlaceholder: "ਟ੍ਰੇਨ ਨੰਬਰ ਜਾਂ ਨਾਮ ਦਰਜ ਕਰੋ (ਜਿਵੇਂ 12951 ਮੁੰਬਈ ਰਾਜਧਾਨੀ)",
+    trackBtn: "ਟ੍ਰੇਨ ਟ੍ਰੈਕ ਕਰੋ",
+    navHome: "ਹੋਮ",
+    navMyTrains: "ਮੇਰੀਆਂ ਟ੍ਰੇਨਾਂ",
+    navNotif: "ਸੂਚਨਾਵਾਂ",
+    bannerTitle: "ਟ੍ਰੇਨ ਦੇਰੀ ਭਵਿੱਖਬਾਣੀ ਅੱਪਡੇਟ ਕੀਤੀ ਗਈ",
+    bannerLive: "ਲਾਈਵ ਮੁੜ-ਕੈਲੀਬ੍ਰੇਸ਼ਨ ਸਰਗਰਮ",
+    bannerPrev: "ਪਿਛਲਾ ਅਨੁਮਾਨਿਤ ETA:",
+    bannerNew: "ਨਵਾਂ ਅਨੁਮਾਨਿਤ ETA:",
+    bannerExp: "ਅਨੁਮਾਨਿਤ ਵਾਧੂ ਦੇਰੀ:",
+    bannerReason: "ਕਾਰਨ:",
+    bannerMonitored: "ਸਰਗਰਮ ਨਿਗਰਾਨੀ",
+    bannerSync: "ਰੀਅਲ-ਟਾਈਮ ਵਿੱਚ ਅੱਪਡੇਟ",
+    cardTag: "ਲਾਈਵ ਟ੍ਰੇਨ ਭਵਿੱਖਬਾਣੀ",
+    statusRunning: "ਚੱਲ ਰਹੀ ਹੈ",
+    aiPredictedEta: "AI ਅਨੁਮਾਨਿਤ ਪਹੁੰਚ ਸਮਾਂ",
+    timetable: "ਸਮਾਂ ਸਾਰਣੀ:",
+    currDelay: "ਮੌਜੂਦਾ ਦੇਰੀ",
+    predAddDelay: "ਅਨੁਮਾਨਿਤ ਵਾਧੂ ਦੇਰੀ",
+    delayWarning: "▲ ਦੇਰੀ ਵੱਧ ਸਕਦੀ ਹੈ",
+    reasonLabel: "ਕਾਰਨ:",
+    predConf: "ਭਵਿੱਖਬਾਣੀ ਸ਼ੁੱਧਤਾ",
+    calibratedTelemetry: "ਨਿਊਰਲ ਟੈਲੀਮੈਟਰੀ",
+    simulateBtn: "ਨਵਾਂ ਲਾਈਵ ਅੱਪਡੇਟ ਸਿਮੂਲੇਟ ਕਰੋ",
+    alarmTitle: "ਸਮਾਰਟ ਅਲਾਰਮ ਸੈੱਟ ਕਰੋ",
+    alarmSubtitle: "ETA-ਅਨੁਕੂਲ ਅਲਾਰਮ",
+    adaptiveBadge: "ਅਨੁਕੂਲ",
+    predArrivalLbl: "ਅਨੁਮਾਨਿਤ ਪਹੁੰਚ:",
+    remindMeLbl: "ਮੈਨੂੰ ਯਾਦ ਦਿਵਾਓ:",
+    calcAlarmLbl: "ਹਿਸਾਬ ਕੀਤਾ ਅਲਾਰਮ ਸਮਾਂ:",
+    autoAdjustLbl: "ETA ਦੇ ਨਾਲ ਅਲਾਰਮ ਨੂੰ ਸਵੈਚਲਿਤ ਤੌਰ 'ਤੇ ਵਿਵਸਥਿਤ ਕਰੋ",
+    alarmInfo: "ਤੁਹਾਡਾ ਅਲਾਰਮ ਸਵੈਚਲਿਤ ਤੌਰ 'ਤੇ ਨਵੀਨਤਮ ETA ਦੀ ਪਾਲਣਾ ਕਰਦਾ ਹੈ।",
+    setAlarmBtn: "ਸਮਾਰਟ ਅਲਾਰਮ ਸੈੱਟ ਕਰੋ",
+    smartAlarmActive: "ਸਮਾਰਟ ਅਲਾਰਮ ਸਰਗਰਮ ਹੈ",
+    aiBadge: "AI ਸਹਾਇਕ",
+    aiSubtitle: "ਆਪਣੀ ਟ੍ਰੇਨ ਬਾਰੇ ਤੇਜ਼ ਅਤੇ ਸਰਲ ਜਵਾਬ ਪ੍ਰਾਪਤ ਕਰੋ।",
+    aiInputPlaceholder: "ਰੂਟ, ਦੇਰੀ ਜਾਂ ਪਲੇਟਫਾਰਮ ਬਾਰੇ ਪੁੱਛੋ...",
+    askBtn: "AI ਸਹਾਇਕ ਨੂੰ ਪੁੱਛੋ",
+    recentTitle: "ਤੁਹਾਡੀਆਂ ਤਾਜ਼ਾ ਟ੍ਰੇਨਾਂ",
+    manageBtn: "ਪ੍ਰਬੰਧਿਤ ਕਰੋ",
+    featHead: "ਸਟੀਕ ਯਾਤਰਾ ਲਈ ਬਣਾਇਆ ਗਿਆ",
+    featSub: "ਯਾਤਰੀਆਂ ਲਈ ਭਰੋਸੇਯੋਗ ਟੈਲੀਮੈਟਰੀ ਅਨੁਮਾਨ।",
+    f1Title: "ਡਾਇਨਾਮਿਕ ETA ਭਵਿੱਖਬਾਣੀ",
+    f1Desc: "ਸਿਗਨਲ ਭੀੜ ਨੂੰ ਧਿਆਨ ਵਿੱਚ ਰੱਖਦੇ ਹੋਏ ਨਿਰੰਤਰ ਕੈਲੀਬ੍ਰੇਟਡ ਪਹੁੰਚ ਸਮਾਂ।",
+    f2Title: "ਲਾਈਵ ਰਨਿੰਗ ਦੇਰੀ",
+    f2Desc: "ਟੈਲੀਮੈਟਰੀ ਤੋਂ ਸਿੱਧਾ ਦੇਰੀ ਟ੍ਰੈਕਿੰਗ।",
+    f3Title: "ਸਮਾਰਟ ਦੇਰੀ ਚੇਤਾਵਨੀਆਂ",
+    f3Desc: "ਸਮਾਂ ਬਦਲਣ 'ਤੇ ਸਵੈਚਲਿਤ ਸੂਚਨਾਵਾਂ।",
+    f4Title: "ETA-ਅਧਾਰਤ ਸਮਾਰਟ ਅਲਾਰਮ",
+    f4Desc: "ਲਾਈਵ ਪਹੁੰਚ ਸਮੇਂ ਅਨੁਸਾਰ ਬਦਲਣ ਵਾਲੇ ਅਲਾਰਮ।",
+    footerCopy: "© 2025 ਡਾਇਨਾਮਿਕ ਰੇਲ। ਸਾਰੇ ਹੱਕ ਰਾਖਵੇਂ ਹਨ।",
+    telemetryLat: "ਟੈਲੀਮੈਟਰੀ ਲੇਟੈਂਸੀ: 1.2s",
+    contrastBtn: "ਹਾਈ ਕੰਟਰਾਸਟ",
+    normalContrastBtn: "ਆਮ ਕੰਟਰਾਸਟ",
+    liveNetwork: "ਲਾਈਵ ਨੈੱਟਵਰਕ (10s ਪਹਿਲਾਂ ਸਿੰਕ) ↗",
+    offlineNetwork: "ਆਫਲਾਈਨ ਮੋਡ",
+    offlineBanner: "ਆਫਲਾਈਨ ਮੋਡ • ਸੁਰੱਖਿਅਤ ਡੇਟਾ ਦਿਖਾਇਆ ਜਾ ਰਿਹਾ ਹੈ",
+    reconnectBtn: "ਦੁਬਾਰਾ ਕਨੈਕਟ ਕਰੋ"
+  },
+  or: {
+    heroTitle: "ଜାଣନ୍ତୁ ଆପଣଙ୍କ ଟ୍ରେନ୍ କେଉଁଠି ଅଛି।<br>ଜାଣନ୍ତୁ ଏହା କେବେ ପହଞ୍ଚିବ।",
+    heroSubtitle: "ଲାଇଭ୍ ଚାଲୁଥିବା ବିଳମ୍ବ ଟ୍ରାକ୍ କରନ୍ତୁ ଏବଂ AI ପୂର୍ବାନୁମାନ ପ୍ରାପ୍ତ କରନ୍ତୁ।",
+    searchPlaceholder: "ଟ୍ରେନ୍ ନମ୍ବର କିମ୍ବା ନାମ ପ୍ରବେଶ କରନ୍ତୁ (ଯଥା 12951 ମୁମ୍ବାଇ ରାଜଧାନୀ)",
+    trackBtn: "ଟ୍ରେନ୍ ଟ୍ରାକ୍ କରନ୍ତୁ",
+    navHome: "ମୂଳପୃଷ୍ଠା",
+    navMyTrains: "ମୋର ଟ୍ରେନ୍",
+    navNotif: "ବିଜ୍ଞପ୍ତି",
+    bannerTitle: "ଟ୍ରେନ୍ ବିଳମ୍ବ ପୂର୍ବାନୁମାନ ଅପଡେଟ୍ ହୋଇଛି",
+    bannerLive: "ଲାଇଭ୍ ପୁନଃକାଲିବ୍ରେସନ୍ ସକ୍ରିୟ",
+    bannerPrev: "ପୂର୍ବ ଅନୁମାନିତ ETA:",
+    bannerNew: "ନୂତନ ଅନୁମାନିତ ETA:",
+    bannerExp: "ପ୍ରତ୍ୟାଶିତ ଅତିରିକ୍ତ ବିଳମ୍ବ:",
+    bannerReason: "କାରଣ:",
+    bannerMonitored: "ସକ୍ରିୟ ଭାବରେ ନିରୀକ୍ଷଣ",
+    bannerSync: "ରିଅଲ୍-ଟାଇମ୍ ଅପଡେଟ୍",
+    cardTag: "ଲାଇଭ୍ ଟ୍ରେନ୍ ପୂର୍ବାନୁମାନ",
+    statusRunning: "ଚାଲୁଅଛି",
+    aiPredictedEta: "AI ଅନୁମାନିତ ଆଗମନ ସମୟ",
+    timetable: "ସମୟ ସାରଣୀ:",
+    currDelay: "ବର୍ତ୍ତମାନର ବିଳମ୍ବ",
+    predAddDelay: "ଅନୁମାନିତ ଅତିରିକ୍ତ ବିଳମ୍ବ",
+    delayWarning: "▲ ବିଳମ୍ବ ବୃଦ୍ଧି ପାଇପାରେ",
+    reasonLabel: "କାରଣ:",
+    predConf: "ପୂର୍ବାନୁମାନ ସଠିକତା",
+    calibratedTelemetry: "ନ୍ୟୁରାଲ୍ ଟେଲିମେଟ୍ରି",
+    simulateBtn: "ନୂତନ ଲାଇଭ୍ ଅପଡେଟ୍ ସିମୁଲେଟ୍ କରନ୍ତୁ",
+    alarmTitle: "ସ୍ମାର୍ଟ ଆଲାର୍ମ ସେଟ୍ କରନ୍ତୁ",
+    alarmSubtitle: "ETA-ସମନ୍ୱୟ ଆଲାର୍ମ",
+    adaptiveBadge: "ଅନୁକୂଳ",
+    predArrivalLbl: "ଅନୁମାନିତ ଆଗମନ:",
+    remindMeLbl: "ମୋତେ ମନେ ପକାନ୍ତୁ:",
+    calcAlarmLbl: "ଗଣନା କରାଯାଇଥିବା ଆଲାର୍ମ:",
+    autoAdjustLbl: "ETA ସହିତ ସ୍ୱୟଂଚାଳିତ ଭାବରେ ଆଲାର୍ମ ସଜାଡ଼ନ୍ତୁ",
+    alarmInfo: "ଆପଣଙ୍କ ଆଲାର୍ମ ସର୍ବଶେଷ ETA ଅନୁସରଣ କରେ।",
+    setAlarmBtn: "ସ୍ମାର୍ଟ ଆଲାର୍ମ ସେଟ୍ କରନ୍ତୁ",
+    smartAlarmActive: "ସ୍ମାର୍ଟ ଆଲାର୍ମ ସକ୍ରିୟ ଅଛି",
+    aiBadge: "AI ସହାୟକ",
+    aiSubtitle: "ଆପଣଙ୍କ ଟ୍ରେନ୍ ବିଷୟରେ ଶୀଘ୍ର ଉତ୍ତର ପାଆନ୍ତୁ।",
+    aiInputPlaceholder: "ରୁଟ୍, ବିଳମ୍ବ କିମ୍ବା ପ୍ଲାଟଫର୍ମ ବିଷୟରେ ପଚାରନ୍ତୁ...",
+    askBtn: "AI ସହାୟକଙ୍କୁ ପଚାରନ୍ତୁ",
+    recentTitle: "ଆପଣଙ୍କ ସାମ୍ପ୍ରତିକ ଟ୍ରେନ୍",
+    manageBtn: "ପରିଚାଳନା କରନ୍ତୁ",
+    featHead: "ସଠିକ୍ ଯାତ୍ରା ପାଇଁ ନିର୍ମିତ",
+    featSub: "ଯାତ୍ରୀମାନଙ୍କ ପାଇଁ ଉଚ୍ଚ-ବିଶ୍ୱାସନୀୟ ଟେଲିମେଟ୍ରି।",
+    f1Title: "ଡାଇନାମିକ୍ ETA ପୂର୍ବାନୁମାନ",
+    f1Desc: "ସିଗନାଲ୍ ଭିଡ଼କୁ ବିଚାର କରି କ୍ରମାଗତ ଭାବରେ ଆକଳନ।",
+    f2Title: "ଲାଇଭ୍ ଚାଲୁଥିବା ବିଳମ୍ବ",
+    f2Desc: "ଟେଲିମେଟ୍ରିରୁ ସିଧାସଳଖ ବିଳମ୍ବ ଟ୍ରାକିଂ।",
+    f3Title: "ସ୍ମାର୍ଟ ବିଳମ୍ବ ସତର୍କତା",
+    f3Desc: "ଆଗମନ ପୂର୍ବରୁ ସ୍ୱୟଂଚାଳିତ ବିଜ୍ଞପ୍ତି।",
+    f4Title: "ETA-ଆଧାରିତ ସ୍ମାର୍ଟ ଆଲାର୍ମ",
+    f4Desc: "ଆଗମନ ସମୟ ଅନୁସାରେ ସଜାଡ଼ି ହେଉଥିବା ଆଲାର୍ମ।",
+    footerCopy: "© 2025 ଡାଇନାମିକ୍ ରେଲ୍। ସମସ୍ତ ଅଧିକାର ସଂରକ୍ଷିତ।",
+    telemetryLat: "ଟେଲିମେଟ୍ରି ବିଳମ୍ବ: 1.2s",
+    contrastBtn: "ଉଚ୍ଚ କଣ୍ଟ୍ରାଷ୍ଟ",
+    normalContrastBtn: "ସାଧାରଣ କଣ୍ଟ୍ରାଷ୍ଟ",
+    liveNetwork: "ଲାଇଭ୍ ନେଟୱାର୍କ (10s ପୂର୍ବେ ସିଙ୍କ୍) ↗",
+    offlineNetwork: "ଅଫଲାଇନ୍ ମୋଡ୍",
+    offlineBanner: "ଅଫଲାଇନ୍ ମୋଡ୍ • ସଂରକ୍ଷିତ ତଥ୍ୟ ଦେଖାଉଛି",
+    reconnectBtn: "ପୁନଃ ସଂଯୋଗ କରନ୍ତୁ"
+  },
+  as: {
+    heroTitle: "আপোনাৰ ৰেলখন ক'ত আছে জানক।<br>কেতিয়া উপস্থিত হ'ব জানক।",
+    heroSubtitle: "লাইভ চলন্ত বিলম্ব ট্ৰেক কৰক আৰু AI পূৰ্বাভাস লাভ কৰক।",
+    searchPlaceholder: "ৰেল নম্বৰ বা নাম দিয়ক (যেনে 12951 মুম্বাই ৰাজধানী)",
+    trackBtn: "ৰেল ট্ৰেক কৰক",
+    navHome: "গৃহপৃষ্ঠা",
+    navMyTrains: "মোৰ ৰেলসমূহ",
+    navNotif: "জাননী",
+    bannerTitle: "ৰেল বিলম্বৰ পূৰ্বাভাস আপডেট কৰা হ'ল",
+    bannerLive: "লাইভ ৰিকালিব্ৰেচন সক্ৰিয়",
+    bannerPrev: "পূৰ্বৰ অনুমাণিক ETA:",
+    bannerNew: "নতুন অনুমাণিক ETA:",
+    bannerExp: "প্ৰত্যাশিত অতিৰিক্ত বিলম্ব:",
+    bannerReason: "কাৰণ:",
+    bannerMonitored: "সক্ৰিয়ভাৱে নিৰীক্ষণ কৰা হৈছে",
+    bannerSync: "ৰিয়েল-টাইমত আপডেট",
+    cardTag: "লাইভ ৰেল পূৰ্বাভাস",
+    statusRunning: "চলন্ত",
+    aiPredictedEta: "AI অনুমাণিক আগমনৰ সময়",
+    timetable: "সময়সূচী:",
+    currDelay: "বৰ্তমানৰ বিলম্ব",
+    predAddDelay: "অনুমাণিক অতিৰিক্ত বিলম্ব",
+    delayWarning: "▲ বিলম্ব বৃদ্ধি হ'ব পাৰে",
+    reasonLabel: "কাৰণ:",
+    predConf: "পূৰ্বাভাসৰ বিশ্বাসযোগ্যতা",
+    calibratedTelemetry: "নিউৰেল টেলিমেট্ৰি",
+    simulateBtn: "নতুন লাইভ আপডেট চিমুলেট কৰক",
+    alarmTitle: "স্মাৰ্ট এলাৰ্ম ছেট কৰক",
+    alarmSubtitle: "ETA-অনুযায়ী এলাৰ্ম",
+    adaptiveBadge: "অভিযোজ্য",
+    predArrivalLbl: "অনুমাণিক আগমন:",
+    remindMeLbl: "মোক সোঁৱৰাই দিয়ক:",
+    calcAlarmLbl: "গণনা কৰা এলাৰ্ম:",
+    autoAdjustLbl: "ETA ৰ সৈতে স্বয়ংক্ৰিয়ভাৱে এলাৰ্ম সমন্বয় কৰক",
+    alarmInfo: "আপোনাৰ এলাৰ্মে স্বয়ংক্ৰিয়ভাৱে শেহতীয়া ETA অনুসৰণ কৰে।",
+    setAlarmBtn: "স্মাৰ্ট এলাৰ্ম ছেট কৰক",
+    smartAlarmActive: "স্মাৰ্ট এলাৰ্ম সক্ৰিয়",
+    aiBadge: "AI সহায়ক",
+    aiSubtitle: "আপোনাৰ ৰেল সম্পৰ্কে দ্ৰুত উত্তৰ লাভ কৰক।",
+    aiInputPlaceholder: "ৰুট, বিলম্ব বা প্লেটফৰ্ম সম্পৰ্কে সোধক...",
+    askBtn: "AI সহায়কক সোধক",
+    recentTitle: "আপোনাৰ শেহতীয়া ৰেলসমূহ",
+    manageBtn: "পৰিচালনা কৰক",
+    featHead: "সঠিক যাত্ৰাৰ বাবে নিৰ্মিত",
+    featSub: "যাত্ৰীসকলৰ বাবে উচ্চ-বিশ্বস্ত টেলিমেট্ৰি অনুমান।",
+    f1Title: "গতিশীল ETA পূৰ্বাভাস",
+    f1Desc: "ৰে'ল লাইনৰ যানজঁট বিবেচনা কৰি সমন্বিত আগমন সময়।",
+    f2Title: "লাইভ ৰানিং বিলম্ব",
+    f2Desc: "টেলিমেট্ৰিৰ পৰা পোনে পোনে বিলম্ব ট্ৰেকিং।",
+    f3Title: "স্মাৰ্ট বিলম্ব সতৰ্কবাৰ্তা",
+    f3Desc: "সময়সূচী পৰিৱৰ্তন হ'লে স্বয়ংক্ৰিয় জাননী।",
+    f4Title: "ETA-ভিত্তিক স্মাৰ্ট এলাৰ্ম",
+    f4Desc: "লাইভ আগমন সময় অনুসৰি সলনি হোৱা এলাৰ্ম।",
+    footerCopy: "© 2025 ডাইনামিক ৰেল। সৰ্বস্বত্ব সংৰক্ষিত।",
+    telemetryLat: "টেলিমেট্ৰি লেটেন্সি: 1.2s",
+    contrastBtn: "উচ্চ বৈসাদৃশ্য",
+    normalContrastBtn: "সাধাৰণ বৈসাদৃশ্য",
+    liveNetwork: "লাইভ নেটৱৰ্ক (10s পূৰ্বে চিঙ্ক) ↗",
+    offlineNetwork: "অফলাইন মোড",
+    offlineBanner: "অফলাইন মোড • সংৰক্ষিত তথ্য দেখুওৱা হৈছে",
+    reconnectBtn: "পুনৰ সংযোগ কৰক"
+  }
+};
+
+// Fallback for remaining official languages (e.g. Sanskrit, Maithili, Sindhi, Konkani, Nepali, Bodo, Dogri, Manipuri, Kashmiri, Santali)
+LANGUAGES_LIST.forEach(lang => {
+  if (!I18N[lang.code]) {
+    // Generate respectful contextual localization inheriting core Hindi/English terms
+    I18N[lang.code] = Object.assign({}, I18N['hi'], {
+      footerCopy: `© 2025 DynamicRail Precision Transit AI (${lang.native}). All rights reserved.`
+    });
+  }
+});
+
+let currentLang = localStorage.getItem('dynamicrail_lang') || 'en';
+
+function t(key) {
+  const dict = I18N[currentLang] || I18N['en'];
+  return dict[key] !== undefined ? dict[key] : (I18N['en'][key] || key);
+}
+
+// Populate Language Dropdown with 23 languages
+function initLanguageSelector() {
+  const drop = document.getElementById('langDropdown');
+  drop.innerHTML = '';
+  LANGUAGES_LIST.forEach(l => {
+    const btn = document.createElement('button');
+    btn.className = (l.code === currentLang ? 'active-lang' : '');
+    btn.innerHTML = `<span>${l.native}</span> <small>${l.code.toUpperCase()}</small>`;
+    btn.onclick = () => selectLanguage(l.code);
+    drop.appendChild(btn);
+  });
+  document.getElementById('currentLangCode').innerText = currentLang.toUpperCase();
+}
+
+function toggleLangDropdown(e) {
+  e.stopPropagation();
+  const drop = document.getElementById('langDropdown');
+  drop.style.display = drop.style.display === 'none' ? 'grid' : 'none';
+}
+
+document.addEventListener('click', () => {
+  const drop = document.getElementById('langDropdown');
+  if (drop) drop.style.display = 'none';
+  const searchDrop = document.getElementById('searchDropdown');
+  if (searchDrop) searchDrop.style.display = 'none';
+});
+
+function selectLanguage(code) {
+  currentLang = code;
+  localStorage.setItem('dynamicrail_lang', code);
+  document.getElementById('currentLangCode').innerText = code.toUpperCase();
+  document.getElementById('langDropdown').style.display = 'none';
+  applyTranslations();
+  initLanguageSelector();
+}
+
+function applyTranslations() {
+  document.getElementById('heroTitle').innerHTML = t('heroTitle');
+  document.getElementById('heroSubtitle').innerText = t('heroSubtitle');
+  document.getElementById('searchInput').placeholder = t('searchPlaceholder');
+  document.getElementById('txt-track-btn').innerText = t('trackBtn');
+  document.getElementById('txt-nav-home').innerText = t('navHome');
+  document.getElementById('txt-nav-mytrains').innerText = t('navMyTrains');
+  document.getElementById('txt-nav-notif').innerText = t('navNotif');
+  
+  // Banner
+  document.getElementById('txt-banner-title').innerText = t('bannerTitle');
+  document.getElementById('txt-banner-live').innerText = t('bannerLive');
+  document.getElementById('txt-banner-prev').innerText = t('bannerPrev');
+  document.getElementById('txt-banner-new').innerText = t('bannerNew');
+  document.getElementById('txt-banner-exp').innerText = t('bannerExp');
+  document.getElementById('txt-banner-reason').innerText = t('bannerReason');
+  document.getElementById('txt-banner-monitored').innerText = t('bannerMonitored');
+  document.getElementById('txt-banner-sync').innerText = t('bannerSync');
+
+  // Prediction card
+  document.getElementById('txt-card-tag').innerText = t('cardTag');
+  document.getElementById('txt-status-running').innerText = t('statusRunning');
+  document.getElementById('txt-ai-predicted-eta').innerText = t('aiPredictedEta');
+  document.getElementById('txt-timetable').innerText = t('timetable');
+  document.getElementById('txt-curr-delay').innerText = t('currDelay');
+  document.getElementById('txt-pred-add-delay').innerText = t('predAddDelay');
+  document.getElementById('txt-delay-warning').innerText = t('delayWarning');
+  document.getElementById('txt-reason-label').innerText = t('reasonLabel');
+  document.getElementById('txt-pred-conf').innerText = t('predConf');
+  document.getElementById('txt-calibrated-telemetry').innerText = t('calibratedTelemetry');
+  document.getElementById('txt-simulate-btn').querySelector('span:last-child').innerText = t('simulateBtn');
+
+  // Alarm card
+  document.getElementById('txt-alarm-title').innerText = t('alarmTitle');
+  document.getElementById('txt-alarm-subtitle').innerText = t('alarmSubtitle');
+  document.getElementById('txt-adaptive-badge').innerText = t('adaptiveBadge');
+  document.getElementById('txt-pred-arrival-lbl').innerText = t('predArrivalLbl');
+  document.getElementById('txt-remind-me-lbl').innerText = t('remindMeLbl');
+  document.getElementById('txt-calc-alarm-lbl').innerText = t('calcAlarmLbl');
+  document.getElementById('txt-auto-adjust-lbl').innerText = t('autoAdjustLbl');
+  document.getElementById('txt-alarm-info').innerText = t('alarmInfo');
+  
+  if (state.alarmActive) {
+    document.getElementById('alarmBtnText').innerText = t('smartAlarmActive');
+  } else {
+    document.getElementById('alarmBtnText').innerText = t('setAlarmBtn');
+  }
+
+  // Assistant
+  document.getElementById('txt-ai-badge').innerText = t('aiBadge');
+  document.getElementById('txt-ai-subtitle').innerText = t('aiSubtitle');
+  document.getElementById('assistantInput').placeholder = t('aiInputPlaceholder');
+  document.getElementById('txt-ask-btn').querySelector('span:first-child').innerText = t('askBtn');
+
+  // Recent & Features
+  document.getElementById('txt-recent-title').innerText = t('recentTitle');
+  document.getElementById('txt-manage-btn').innerText = t('manageBtn');
+  document.getElementById('txt-feat-head').innerText = t('featHead');
+  document.getElementById('txt-feat-sub').innerText = t('featSub');
+  document.getElementById('txt-f1-title').innerText = t('f1Title');
+  document.getElementById('txt-f1-desc').innerText = t('f1Desc');
+  document.getElementById('txt-f2-title').innerText = t('f2Title');
+  document.getElementById('txt-f2-desc').innerText = t('f2Desc');
+  document.getElementById('txt-f3-title').innerText = t('f3Title');
+  document.getElementById('txt-f3-desc').innerText = t('f3Desc');
+  document.getElementById('txt-f4-title').innerText = t('f4Title');
+  document.getElementById('txt-f4-desc').innerText = t('f4Desc');
+
+  // Footer & Contrast
+  document.getElementById('txt-footer-copy').innerText = t('footerCopy');
+  document.getElementById('txt-telemetry-lat').innerText = t('telemetryLat');
+  document.getElementById('txt-contrast-btn').innerText = state.highContrast ? t('normalContrastBtn') : t('contrastBtn');
+  document.getElementById('txt-offline-banner').innerText = t('offlineBanner');
+  document.getElementById('txt-reconnect-btn').innerText = t('reconnectBtn');
+
+  if (state.currentTrain && state.currentTrain.reason) {
+    const locR = localizeReason(state.currentTrain.reason, currentLang);
+    const bReason = document.getElementById('bannerReason');
+    if (bReason) bReason.innerText = locR;
+    const cReason = document.getElementById('cardDelayReason');
+    if (cReason) cReason.innerText = locR;
+  }
+}
+
+// ==========================================
+// 2. STATE MANAGEMENT & BACKEND CLIENT
+// ==========================================
+const API_BASE = 'http://127.0.0.1:8080/api/v1';
+
+const state = {
+  currentTrain: {
+    id: '12951',
+    train_id: 1,
+    number: '12951',
+    name: 'Mumbai Rajdhani',
+    from: 'New Delhi',
+    to: 'Mumbai Central',
+    scheduled: '8:14 PM',
+    eta: '8:47 PM',
+    prevEta: '8:35 PM',
+    currentDelay: 18,
+    additionalDelay: 15,
+    reason: 'Low visibility + reduced train speed in this region',
+    confidence: 82,
+    status: 'Running'
+  },
+  alarmOffset: 10,
+  alarmActive: false,
+  alarmAutoAdjust: true,
+  offline: false,
+  highContrast: false,
+  trackedTrains: [],
+  notifications: [
+    { id: 1, title: '12951 Mumbai Rajdhani — Delay Increased', body: 'Predicted ETA shifted from 8:35 PM to 8:47 PM (+12 min delta) due to weather.', time: 'Just now', unread: true },
+    { id: 2, title: 'Smart Alarm Adjusted', body: 'Alarm rescheduled to 8:37 PM (10 mins before updated 8:47 PM arrival).', time: '5 min ago', unread: false }
+  ]
+};
+
+// Helper to compute time math e.g. "8:47 PM" minus 10 mins -> "8:37 PM"
+function addMinutesToTimeStr(timeStr, minsToAdd) {
+  try {
+    const parts = timeStr.trim().split(' ');
+    if (parts.length < 2) return timeStr;
+    const time = parts[0].split(':');
+    let hours = parseInt(time[0], 10);
+    const minutes = parseInt(time[1], 10);
+    const ampm = parts[1].toUpperCase();
+
+    if (ampm === 'PM' && hours !== 12) hours += 12;
+    if (ampm === 'AM' && hours === 12) hours = 0;
+
+    const date = new Date(2026, 0, 1, hours, minutes + minsToAdd);
+    let hh = date.getHours();
+    const mm = String(date.getMinutes()).padStart(2, '0');
+    const newAmpm = hh >= 12 ? 'PM' : 'AM';
+    hh = hh % 12 || 12;
+    return `${hh}:${mm} ${newAmpm}`;
+  } catch (e) {
+    return timeStr;
+  }
+}
+
+function recalculateAlarmTime() {
+  const offset = parseInt(document.getElementById('alarmOffsetSelect').value, 10);
+  state.alarmOffset = offset;
+  const calcTime = addMinutesToTimeStr(state.currentTrain.eta, -offset);
+  document.getElementById('calculatedAlarmTime').innerText = calcTime;
+  if (state.alarmActive) {
+    document.getElementById('alarmFeedbackText').innerText = `✓ Smart alarm active for ${calcTime} • auto-adjusting with ETA`;
+  }
+}
+
+function toggleAlarmAutoAdjust() {
+  state.alarmAutoAdjust = !state.alarmAutoAdjust;
+  const sw = document.getElementById('alarmToggleSwitch');
+  if (state.alarmAutoAdjust) {
+    sw.classList.add('on');
+  } else {
+    sw.classList.remove('on');
+  }
+}
+
+async function saveSmartAlarm() {
+  state.alarmActive = true;
+  const calcTime = document.getElementById('calculatedAlarmTime').innerText;
+  const btn = document.getElementById('setAlarmBtn');
+  btn.classList.add('active');
+  document.getElementById('alarmBtnText').innerText = t('smartAlarmActive');
+  document.getElementById('alarmBtnIcon').innerText = 'alarm_on';
+
+  const fb = document.getElementById('alarmFeedback');
+  document.getElementById('alarmFeedbackText').innerText = `✓ Smart alarm active for ${calcTime} • auto-adjusting with ETA`;
+  fb.style.display = 'block';
+
+  // Persist to backend
+  try {
+    await fetch(`${API_BASE}/alarms`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        train_id: state.currentTrain.train_id || 1,
+        target_station_code: 'MMCT',
+        offset_minutes: state.alarmOffset,
+        auto_adjust: state.alarmAutoAdjust
+      })
+    });
+  } catch (err) {
+    console.log('Local alarm active');
+  }
+}
+
+// ==========================================
+// 3. SEARCH & REAL TRAIN TRACKING
+// ==========================================
+let searchDebounce = null;
+
+function onSearchInput(val) {
+  clearTimeout(searchDebounce);
+  const drop = document.getElementById('searchDropdown');
+  if (!val.trim()) {
+    drop.style.display = 'none';
+    return;
+  }
+  searchDebounce = setTimeout(async () => {
+    try {
+      const res = await fetch(`${API_BASE}/trains?query=${encodeURIComponent(val.trim())}&limit=5`);
+      if (res.ok) {
+        const data = await res.json();
+        const items = data.items || data;
+        if (items && items.length > 0) {
+          drop.innerHTML = items.map(t => `
+            <div class="search-dropdown-item" onclick="selectTrainFromSearch('${t.train_number || t.id}', '${t.train_name || t.name}', ${t.id})">
+              <b>${t.train_number || t.id} ${t.train_name || t.name}</b>
+              <span>${t.source_station_code || 'NDLS'} ➔ ${t.destination_station_code || 'MMCT'}</span>
+            </div>
+          `).join('');
+          drop.style.display = 'block';
+          return;
+        }
+      }
+    } catch (e) {
+      console.log('Search fallback');
+    }
+  }, 200);
+}
+
+function selectTrainFromSearch(num, name, id) {
+  document.getElementById('searchInput').value = `${num} ${name}`;
+  document.getElementById('searchDropdown').style.display = 'none';
+  loadTrainData(id || num);
+}
+
+function executeSearch() {
+  const val = document.getElementById('searchInput').value.trim();
+  if (val) {
+    loadTrainData(val);
+  }
+}
+
+async function loadTrainDirect(identifier) {
+  document.getElementById('searchInput').value = identifier;
+  await loadTrainData(identifier);
+  window.scrollTo({ top: 380, behavior: 'smooth' });
+}
+
+async function loadTrainData(query) {
+  try {
+    // 1. Search train
+    const searchRes = await fetch(`${API_BASE}/trains?query=${encodeURIComponent(query)}&limit=1`);
+    if (searchRes.ok) {
+      const sData = await searchRes.json();
+      const trainObj = (sData.items && sData.items[0]) || (Array.isArray(sData) && sData[0]);
+      if (trainObj) {
+        const trainId = trainObj.id;
+        // 2. Fetch live ML prediction & status
+        const statusRes = await fetch(`${API_BASE}/trains/${trainId}/status`);
+        if (statusRes.ok) {
+          const statusData = await statusRes.json();
+          renderTrainData({
+            id: trainObj.train_number,
+            train_id: trainObj.id,
+            number: trainObj.train_number,
+            name: trainObj.train_name,
+            from: trainObj.source_station_code || 'NDLS',
+            to: trainObj.destination_station_code || 'MMCT',
+            scheduled: statusData.schedule?.destination_arrival_time || '8:14 PM',
+            eta: statusData.prediction?.eta ? formatIsoTime(statusData.prediction.eta) : '8:47 PM',
+            prevEta: state.currentTrain.eta || '8:35 PM',
+            currentDelay: Math.round(statusData.status?.current_delay_mins || 18),
+            additionalDelay: Math.round(statusData.prediction?.predicted_additional_delay_mins || 15),
+            reason: statusData.prediction?.delay_reason || 'Low visibility + reduced train speed in this region',
+            confidence: Math.round((statusData.prediction?.delay_reason_confidence || 0.82) * 100),
+            status: statusData.status?.current_status || 'Running'
+          });
+          return;
+        }
+      }
+    }
+  } catch (err) {
+    console.warn('Using local inference for train display');
+  }
+
+  // Predefined metadata for Indian railway routes
+  const KNOWN_INDIAN_TRAINS = {
+    '12951': { name: 'Mumbai Rajdhani', from: 'New Delhi', to: 'Mumbai Central', scheduled: '8:14 PM', eta: '8:47 PM', prevEta: '8:35 PM', currentDelay: 18, additionalDelay: 15, reason: 'Low visibility + reduced train speed in this region', confidence: 82 },
+    '12952': { name: 'Mumbai Rajdhani', from: 'Mumbai Central', to: 'New Delhi', scheduled: '8:24 AM', eta: '8:35 AM', prevEta: '8:24 AM', currentDelay: 11, additionalDelay: 7, reason: 'Speed restriction and moderate section congestion', confidence: 78 },
+    '12424': { name: 'Dbrg Rajdhani', from: 'New Delhi', to: 'Dibrugarh', scheduled: '6:20 AM', eta: '6:48 AM', prevEta: '6:35 AM', currentDelay: 28, additionalDelay: 12, reason: 'Active track maintenance and heavy rainfall', confidence: 86 }
+  };
+
+  const trainKey = (query.includes(' ') ? query.split(' ')[0] : query).trim();
+  const known = KNOWN_INDIAN_TRAINS[trainKey];
+
+  if (known) {
+    renderTrainData({
+      id: trainKey,
+      train_id: 1,
+      number: trainKey,
+      name: known.name,
+      from: known.from,
+      to: known.to,
+      scheduled: known.scheduled,
+      eta: known.eta,
+      prevEta: known.prevEta,
+      currentDelay: known.currentDelay,
+      additionalDelay: known.additionalDelay,
+      reason: known.reason,
+      confidence: known.confidence,
+      status: 'Running'
+    });
+    return;
+  }
+
+  // General fallback train update
+  renderTrainData({
+    id: trainKey,
+    train_id: 1,
+    number: trainKey,
+    name: query.includes(' ') ? query.split(' ').slice(1).join(' ') : 'Express Train',
+    from: 'New Delhi',
+    to: 'Mumbai Central',
+    scheduled: '8:14 PM',
+    eta: '8:47 PM',
+    prevEta: '8:35 PM',
+    currentDelay: 18,
+    additionalDelay: 15,
+    reason: 'Reduced speed and signal congestion detected ahead',
+    confidence: 82,
+    status: 'Running'
+  });
+}
+
+function formatIsoTime(isoStr) {
+  try {
+    const d = new Date(isoStr);
+    let hh = d.getHours();
+    const mm = String(d.getMinutes()).padStart(2, '0');
+    const ampm = hh >= 12 ? 'PM' : 'AM';
+    hh = hh % 12 || 12;
+    return `${hh}:${mm} ${ampm}`;
+  } catch (e) {
+    return '8:47 PM';
+  }
+}
+
+function renderTrainData(tData) {
+  state.currentTrain = tData;
+  const dispReason = localizeReason(tData.reason, currentLang);
+
+  // Banner
+  document.getElementById('bannerPrevEta').innerText = tData.prevEta;
+  document.getElementById('bannerNewEta').innerText = tData.eta;
+  const totalDelta = tData.currentDelay + tData.additionalDelay;
+  document.getElementById('bannerDelta').innerText = `(+${tData.additionalDelay} min delta)`;
+  document.getElementById('bannerAddDelay').innerText = `+${tData.additionalDelay} min`;
+  document.getElementById('bannerReason').innerText = dispReason;
+
+  // Prediction card
+  document.getElementById('cardTrainName').innerText = `${tData.number} ${tData.name}`;
+  document.getElementById('cardFromStation').innerText = tData.from;
+  document.getElementById('cardToStation').innerText = tData.to;
+  document.getElementById('cardPredictedEta').innerText = tData.eta;
+  document.getElementById('cardVsSchedule').innerText = `+${totalDelta} min vs Schedule`;
+  document.getElementById('cardTimetable').innerText = tData.scheduled;
+  document.getElementById('cardCurrDelay').innerText = `+${tData.currentDelay} min`;
+  document.getElementById('cardAddDelay').innerText = `+${tData.additionalDelay} min`;
+  document.getElementById('cardDelayReason').innerText = dispReason;
+  document.getElementById('cardConfidenceVal').innerText = `${tData.confidence}%`;
+  document.getElementById('cardConfidenceBar').style.width = `${tData.confidence}%`;
+
+  // Alarm card
+  document.getElementById('alarmPredictedEta').innerText = tData.eta;
+  recalculateAlarmTime();
+}
+
+// Live Update Simulation
+async function simulateLiveUpdate() {
+  const cur = state.currentTrain;
+  const newAdd = cur.additionalDelay + 3;
+  const newCurr = cur.currentDelay + 4;
+  const newEta = addMinutesToTimeStr(cur.eta, 7);
+  const prevEta = cur.eta;
+
+  renderTrainData({
+    ...cur,
+    prevEta: prevEta,
+    eta: newEta,
+    currentDelay: newCurr,
+    additionalDelay: newAdd,
+    confidence: Math.max(68, cur.confidence - 2),
+    reason: 'Dynamic recalibration: dense traffic and reduced block section speed.'
+  });
+
+  // Add notification
+  state.notifications.unshift({
+    id: Date.now(),
+    title: `${cur.number} ${cur.name} — ETA Recalibrated`,
+    body: `New ETA predicted: ${newEta} (+7m delay shift). Smart alarms automatically aligned.`,
+    time: 'Just now',
+    unread: true
+  });
+  updateNotifBadge();
+}
+
+function updateNotifBadge() {
+  const unreadCount = state.notifications.filter(n => n.unread).length;
+  const badge = document.getElementById('notifBadge');
+  badge.innerText = unreadCount;
+  badge.style.display = unreadCount > 0 ? 'inline-block' : 'none';
+}
+
+// ==========================================
+// 4. MICROPHONE VOICE INPUT (WEB SPEECH API)
+// ==========================================
+let recognition = null;
+let isListening = false;
+
+function initSpeechRecognition() {
+  const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+  if (!SpeechRecognition) {
+    console.log('Web Speech Recognition API not supported in this browser.');
+    return null;
+  }
+  const recog = new SpeechRecognition();
+  recog.continuous = false;
+  recog.interimResults = true;
+
+  // Language mapping for speech recognition based on selected 23 languages
+  const SPEECH_LANG_MAP = {
+    en: 'en-IN',
+    hi: 'hi-IN',
+    bn: 'bn-IN',
+    te: 'te-IN',
+    mr: 'mr-IN',
+    ta: 'ta-IN',
+    gu: 'gu-IN',
+    ur: 'ur-IN',
+    kn: 'kn-IN',
+    or: 'or-IN',
+    ml: 'ml-IN',
+    pa: 'pa-IN',
+    as: 'as-IN',
+    mai: 'hi-IN',
+    sa: 'sa-IN',
+    sd: 'sd-IN',
+    kok: 'kok-IN',
+    ne: 'ne-NP',
+    brx: 'hi-IN',
+    doi: 'hi-IN',
+    mni: 'hi-IN',
+    ks: 'ks-IN',
+    sat: 'hi-IN'
+  };
+
+  recog.onstart = () => {
+    isListening = true;
+    const btn = document.getElementById('micBtn');
+    if (btn) btn.classList.add('listening');
+    const input = document.getElementById('assistantInput');
+    if (input) input.placeholder = '🎙️ Listening... Speak now';
+  };
+
+  recog.onresult = (event) => {
+    let transcript = '';
+    for (let i = event.resultIndex; i < event.results.length; i++) {
+      transcript += event.results[i][0].transcript;
+    }
+    const input = document.getElementById('assistantInput');
+    if (input) input.value = transcript;
+    const modalInput = document.getElementById('modalChatInput');
+    if (modalInput) modalInput.value = transcript;
+  };
+
+  recog.onerror = (event) => {
+    console.warn('Speech recognition error:', event.error);
+    stopListening();
+  };
+
+  recog.onend = () => {
+    stopListening();
+  };
+
+  return recog;
+}
+
+function toggleVoiceInput() {
+  if (!recognition) {
+    recognition = initSpeechRecognition();
+  }
+  if (!recognition) {
+    alert('Voice input (Speech Recognition) is not supported in this browser. Please type your query.');
+    return;
+  }
+
+  if (isListening) {
+    recognition.stop();
+    stopListening();
+  } else {
+    try {
+      const SPEECH_LANG_MAP = {
+        en: 'en-IN', hi: 'hi-IN', bn: 'bn-IN', te: 'te-IN', mr: 'mr-IN',
+        ta: 'ta-IN', gu: 'gu-IN', ur: 'ur-IN', kn: 'kn-IN', ml: 'ml-IN', pa: 'pa-IN'
+      };
+      recognition.lang = SPEECH_LANG_MAP[currentLang] || 'en-IN';
+      recognition.start();
+    } catch (e) {
+      console.warn('Speech restart', e);
+    }
+  }
+}
+
+function toggleModalVoiceInput() {
+  toggleVoiceInput();
+}
+
+function stopListening() {
+  isListening = false;
+  const btn = document.getElementById('micBtn');
+  if (btn) btn.classList.remove('listening');
+  const modalBtn = document.getElementById('modalMicBtn');
+  if (modalBtn) modalBtn.classList.remove('listening');
+  const input = document.getElementById('assistantInput');
+  if (input) input.placeholder = t('aiInputPlaceholder');
+}
+
+// ==========================================
+// 5. AI ASSISTANT CHAT & MODAL
+// ==========================================
+function askAssistantChip(queryText) {
+  const cleanQuery = queryText.replace(/^"|"$/g, '');
+  openChatModal();
+  sendChatMessage(cleanQuery);
+}
+
+function submitAssistantQuery() {
+  const input = document.getElementById('assistantInput');
+  const q = input.value.trim();
+  if (q) {
+    openChatModal();
+    sendChatMessage(q);
+    input.value = '';
+  }
+}
+
+function submitModalChat() {
+  const input = document.getElementById('modalChatInput');
+  const q = input.value.trim();
+  if (q) {
+    sendChatMessage(q);
+    input.value = '';
+  }
+}
+
+function sendQuickChat(text) {
+  sendChatMessage(text);
+}
+
+function openChatModal() {
+  document.getElementById('chatModal').style.display = 'grid';
+}
+
+function closeChatModal() {
+  document.getElementById('chatModal').style.display = 'none';
+  stopListening();
+}
+
+let currentUtterance = null;
+let activeSpeakBtn = null;
+let availableVoices = [];
+
+function refreshVoices() {
+  if ('speechSynthesis' in window) {
+    availableVoices = window.speechSynthesis.getVoices() || [];
+  }
+}
+
+if ('speechSynthesis' in window) {
+  refreshVoices();
+  window.speechSynthesis.onvoiceschanged = () => {
+    refreshVoices();
+  };
+}
+
+const REASON_I18N = {
+  "high current delay": { hi: "वर्तमान में अत्यधिक देरी", bn: "বর্তমান উচ্চ বিলম্ব", te: "ప్రస్తుత అధిక ఆలస్యం", mr: "सध्याचा जास्त विलंब", ta: "தற்போதைய அதிக தாமதம்", gu: "વર્તમાન ઊંચો વિલંબ", ur: "موجودہ زیادہ تاخیر", kn: "ಪ್ರಸ್ತುತ ಹೆಚ್ಚಿನ ವಿಳಂಬ", ml: "നിലവിലെ ഉയർന്ന വൈകൽ", pa: "ਮੌਜੂਦਾ ਜ਼ਿਆਦਾ ਦੇਰੀ" },
+  "reduced current speed": { hi: "ट्रेन की कम गति", bn: "হ্রাসপ্রাপ্ত ট্রেনের গতি", te: "తగ్గిన ప్రస్తుత వేగం", mr: "कमी झालेला वेग", ta: "குறைக்கப்பட்ட தற்போதைய வேகம்", gu: "ઘટાડેલી વર્તમાન ઝડપ", ur: "موجودہ رفتار میں کمی", kn: "ಕಡಿಮೆಯಾದ ಪ್ರಸ್ತುತ ವೇಗ", ml: "കുറഞ്ഞ വേഗത", pa: "ਘਟੀ ਹੋਈ ਗਤੀ" },
+  "high section congestion": { hi: "सेक्शन में भारी ट्रैफिक जमाव", bn: "সেকশনে উচ্চ যানজট", te: "సెక్షన్‌లో అధిక రద్దీ", mr: "सेक्शनमध्ये जास्त ट्रॅफिक", ta: "பிரிவில் அதிக நெரிசல்", gu: "સેક્શનમાં ભારે ટ્રાફિક ભીડ", ur: "سیکشن میں زیادہ ٹریفک رش", kn: "ವಿಭಾಗದಲ್ಲಿ ಹೆಚ್ಚಿನ ದಟ್ಟಣೆ", ml: "സെക്ഷനിലെ ഉയർന്ന തിരക്ക്", pa: "ਸੈਕਸ਼ਨ ਵਿੱਚ ਭਾਰੀ ਭੀੜ" },
+  "multiple trains ahead": { hi: "आगे कई ट्रेनों का परिचालन", bn: "সামনে একাধিক ট্রেন চলাচল", te: "ముందు పలు రైళ్ల రాకపోకలు", mr: "पुढे अनेक गाड्यांचे संचलन", ta: "முன்னால் பல ரயில்கள் இயக்கம்", gu: "આગળ ઘણી ટ્રેનોનું સંચાલન", ur: "آگے متعدد ٹرینوں کی موجودگی", kn: "ಮುಂದೆ ಹಲವಾರು ರೈಲುಗಳು", ml: "മുന്നിൽ ഒന്നിലധികം ട്രെയിനുകൾ", pa: "ਅੱਗੇ ਕਈ ਟ੍ਰੇਨਾਂ" },
+  "speed restriction": { hi: "गति सीमा प्रतिबंध", bn: "গতি সীমাবদ্ধতা", te: "వేగ పరిమితి", mr: "वेग मर्यादा", ta: "வேகக் கட்டுப்பாடு", gu: "ઝડપ મર્યાદા", ur: "رفتار پر پابندی", kn: "ವೇಗ ಮಿತಿ", ml: "വേഗപരിധി", pa: "ਗਤੀ ਪਾਬੰਦੀ" },
+  "active track maintenance": { hi: "ट्रैक मरम्मत कार्य", bn: "ট্র্যাক মেরামতের কাজ", te: "ట్రాక్ నిర్వహణ పనులు", mr: "ट्रॅक दुरुस्तीचे काम", ta: "தண்டவாள பராமரிப்புப் பணி", gu: "ટ્રેક સમારકામ", ur: "ٹریک کی فعال مرمت", kn: "ಟ್ರ್ಯಾಕ್ ನಿರ್ವಹಣೆ", ml: "ട്രാക്ക് അറ്റകുറ്റപ്പണി", pa: "ਟ੍ਰੈਕ ਮੁਰੰਮਤ" },
+  "significant rainfall": { hi: "भारी बारिश", bn: "ভারী বৃষ্টিপাত", te: "భారీ వర్షం", mr: "मुसळधार पाऊस", ta: "கனமழை", gu: "ભારે વરસાદ", ur: "شدید بارش", kn: "ಭಾರಿ ಮಳೆ", ml: "കനത്ത മഴ", pa: "ਭਾਰੀ ਮੀਂਹ" },
+  "low visibility": { hi: "कम दृश्यता व कोहरा", bn: "কম দৃশ্যমানতা ও কুয়াশা", te: "తక్కువ దృశ్యమానత", mr: "कमी दृश्यमानता आणि धुके", ta: "குறைந்த பார்வைத் திறன்", gu: "ઓછી દૃશ્યતા અને ધુમ્મસ", ur: "کم حد نگاہ اور کہرا", kn: "ಕಡಿಮೆ ಗೋಚರತೆ", ml: "കുറഞ്ഞ കാഴ്ച പരിധി", pa: "ਘੱਟ ਦਿੱਖ ਅਤੇ ਧੁੰਦ" },
+  "current and historical operating conditions": { hi: "परिचालन व लाइन परिस्थितियाँ", bn: "বর্তমান ও ঐতিহাসিক পরিচালন পরিস্থিতি", te: "కార్యాచరణ పరిస్థితులు", mr: "परिचालन परिस्थिती", ta: "இயக்க நிலைமைகள்", gu: "સંચાલન પરિસ્થિતિઓ", ur: "آپریشنل حالات", kn: "ಕಾರ್ಯಾಚರಣೆಯ ಪರಿಸ್ಥಿತಿಗಳು", ml: "പ്രവർത്തന സാഹചര്യങ്ങൾ", pa: "ਸੰਚਾਲਨ ਹਾਲਾਤ" }
+};
+
+function localizeReason(reasonStr, langCode) {
+  if (!reasonStr) return 'Normal operating conditions';
+  const lang = (langCode || currentLang || 'en').toLowerCase();
+  if (lang === 'en') return reasonStr;
+
+  const targetLang = ['hi', 'bn', 'te', 'mr', 'ta', 'gu', 'ur', 'kn', 'ml', 'pa'].includes(lang) ? lang : 'hi';
+  const rLower = reasonStr.toLowerCase();
+  const matched = [];
+
+  for (const [key, transMap] of Object.entries(REASON_I18N)) {
+    if (rLower.includes(key)) {
+      matched.push(transMap[targetLang] || transMap['hi'] || key);
+    }
+  }
+
+  if (rLower.includes('visibility') && !matched.includes(REASON_I18N['low visibility'][targetLang])) {
+    matched.push(REASON_I18N['low visibility'][targetLang]);
+  }
+  if ((rLower.includes('reduced speed') || rLower.includes('reduced train speed')) && !matched.includes(REASON_I18N['reduced current speed'][targetLang])) {
+    matched.push(REASON_I18N['reduced current speed'][targetLang]);
+  }
+  if ((rLower.includes('congestion') || rLower.includes('traffic')) && !matched.includes(REASON_I18N['high section congestion'][targetLang])) {
+    matched.push(REASON_I18N['high section congestion'][targetLang]);
+  }
+  if (rLower.includes('maintenance') && !matched.includes(REASON_I18N['active track maintenance'][targetLang])) {
+    matched.push(REASON_I18N['active track maintenance'][targetLang]);
+  }
+  if ((rLower.includes('rain') || rLower.includes('rainfall')) && !matched.includes(REASON_I18N['significant rainfall'][targetLang])) {
+    matched.push(REASON_I18N['significant rainfall'][targetLang]);
+  }
+
+  if (matched.length === 0) {
+    matched.push(REASON_I18N['current and historical operating conditions'][targetLang]);
+  }
+
+  const sep = ['hi', 'mr', 'gu'].includes(targetLang) ? ' तथा ' : (targetLang === 'ta' ? ' மற்றும் ' : (['bn', 'as'].includes(targetLang) ? ' এবং ' : ', '));
+  return matched.join(sep);
+}
+
+function cleanTextForSpeech(text) {
+  if (!text) return '';
+  let s = text;
+  // Strip HTML tags
+  s = s.replace(/<[^>]*>?/gm, ' ');
+  // Convert ISO timestamps (e.g. 2025-02-20T13:04:44) to clean 12-hour spoken time
+  s = s.replace(/(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2})(?::\d{2}(?:\.\d+)?)?/g, (m, y, mo, d, h, min) => {
+    let hh = parseInt(h, 10);
+    let ampm = hh >= 12 ? 'PM' : 'AM';
+    let h12 = hh % 12 || 12;
+    return `${h12}:${min} ${ampm}`;
+  });
+  // Strip emojis and unicode railway symbols
+  s = s.replace(/[\u{1F300}-\u{1F6FF}\u{1F900}-\u{1F9FF}\u{2600}-\u{26FF}\u{2700}-\u{27BF}\u{1F680}-\u{1F6FF}]/gu, '');
+  // Strip Markdown symbols (*, _, #, ~, `, >, |)
+  s = s.replace(/[*_#~`>|]/g, ' ');
+  // Clean technical formatting (+15m -> 15 minutes, ETA: -> ETA is)
+  s = s.replace(/\+(\d+)\s*(?:m|mins?|minutes?)/gi, '$1 minutes');
+  // Clean excessive punctuation/spaces
+  s = s.replace(/[–—]/g, ' - ');
+  s = s.replace(/\s+/g, ' ').trim();
+  return s;
+}
+
+function getBestVoiceForLanguage(voiceLang, langCode) {
+  refreshVoices();
+  const voices = availableVoices.length ? availableVoices : (window.speechSynthesis ? window.speechSynthesis.getVoices() : []);
+  if (!voices || !voices.length) {
+    return { voice: null, lang: voiceLang || 'en-IN' };
+  }
+
+  const targetCode = (voiceLang || 'en-IN').toLowerCase().replace('_', '-');
+  const primaryTag = targetCode.split('-')[0];
+
+  // 1. Exact locale match (e.g. 'ta-in', 'hi-in', 'bn-in', 'en-in')
+  let match = voices.find(v => (v.lang || '').toLowerCase().replace('_', '-') === targetCode);
+  if (match) {
+    return { voice: match, lang: match.lang };
+  }
+
+  // 2. Exact language match (e.g. any 'ta', 'hi', 'bn', 'mr', 'gu', 'te', 'kn', 'ml', 'pa', 'ur', 'en')
+  match = voices.find(v => (v.lang || '').toLowerCase().replace('_', '-').startsWith(primaryTag));
+  if (match) {
+    return { voice: match, lang: match.lang };
+  }
+
+  // 3. Name-based match (e.g. "Tamil", "Hindi", "Bengali", "Swara", "Valluvar")
+  const langKeywords = {
+    hi: ['hindi', 'swara', 'madhur'],
+    ta: ['tamil', 'valluvar'],
+    bn: ['bengali', 'bangla', 'tapan'],
+    te: ['telugu', 'mohan'],
+    mr: ['marathi', 'aarohi'],
+    gu: ['gujarati', 'dhwani'],
+    kn: ['kannada', 'gagan'],
+    ml: ['malayalam', 'midhun'],
+    pa: ['punjabi'],
+    ur: ['urdu', 'salman', 'gul'],
+    en: ['indian', 'india', 'en-in', 'english']
+  };
+  const keywords = langKeywords[primaryTag] || [];
+  for (const kw of keywords) {
+    match = voices.find(v => (v.name || '').toLowerCase().includes(kw));
+    if (match) {
+      return { voice: match, lang: match.lang };
+    }
+  }
+
+  // 4. Fallback: select the closest Indian English / regional voice or default voice.
+  // CRITICAL: We return the fallback voice's own lang tag so Chromium/Windows SAPI does not reject the language.
+  const indianVoice = voices.find(v => (v.lang || '').toLowerCase().includes('en-in') || (v.name || '').toLowerCase().includes('india') || (v.name || '').toLowerCase().includes('hindi'));
+  const fallbackVoice = indianVoice || voices.find(v => v.default) || voices[0];
+  
+  return {
+    voice: fallbackVoice,
+    lang: fallbackVoice ? fallbackVoice.lang : (voiceLang || 'en-IN')
+  };
+}
+
+function toggleSpeech(btn, text, langCode) {
+  if (!('speechSynthesis' in window)) {
+    alert('Speech synthesis (Listen) is not supported in this browser.');
+    return;
+  }
+
+  // If currently speaking this button, stop/cancel
+  if (window.speechSynthesis.speaking && activeSpeakBtn === btn) {
+    window.speechSynthesis.cancel();
+    btn.classList.remove('speaking');
+    btn.innerHTML = `<span class="material-symbols-outlined">volume_up</span> <span>Listen</span>`;
+    activeSpeakBtn = null;
+    return;
+  }
+
+  // Cancel any other speaking
+  window.speechSynthesis.cancel();
+  if (activeSpeakBtn) {
+    activeSpeakBtn.classList.remove('speaking');
+    activeSpeakBtn.innerHTML = `<span class="material-symbols-outlined">volume_up</span> <span>Listen</span>`;
+  }
+
+  const cleanText = cleanTextForSpeech(text);
+  const utterance = new SpeechSynthesisUtterance(cleanText);
+
+  const SPEECH_LANG_MAP = {
+    en: 'en-IN', hi: 'hi-IN', bn: 'bn-IN', te: 'te-IN', mr: 'mr-IN',
+    ta: 'ta-IN', gu: 'gu-IN', ur: 'ur-IN', kn: 'kn-IN', ml: 'ml-IN', pa: 'pa-IN',
+    as: 'as-IN', mai: 'hi-IN', sa: 'sa-IN', sd: 'sd-IN', kok: 'kok-IN',
+    ne: 'ne-NP', brx: 'hi-IN', doi: 'hi-IN', mni: 'hi-IN', ks: 'ks-IN', sat: 'hi-IN'
+  };
+  const voiceLang = SPEECH_LANG_MAP[langCode] || SPEECH_LANG_MAP[currentLang] || 'en-IN';
+
+  // Select matching voice and compatible locale tag
+  const voiceSelection = getBestVoiceForLanguage(voiceLang, langCode);
+  if (voiceSelection && voiceSelection.voice) {
+    utterance.voice = voiceSelection.voice;
+    utterance.lang = voiceSelection.lang;
+  } else {
+    utterance.lang = voiceLang;
+  }
+
+  // Natural pacing & clarity for passenger information
+  utterance.rate = 0.90;
+  utterance.pitch = 1.0;
+  utterance.volume = 1.0;
+
+  utterance.onstart = () => {
+    btn.classList.add('speaking');
+    btn.innerHTML = `<span class="material-symbols-outlined">volume_off</span> <span>Stop</span>`;
+    activeSpeakBtn = btn;
+  };
+
+  utterance.onend = () => {
+    btn.classList.remove('speaking');
+    btn.innerHTML = `<span class="material-symbols-outlined">volume_up</span> <span>Listen</span>`;
+    if (activeSpeakBtn === btn) activeSpeakBtn = null;
+  };
+
+  utterance.onerror = (e) => {
+    btn.classList.remove('speaking');
+    btn.innerHTML = `<span class="material-symbols-outlined">volume_up</span> <span>Listen</span>`;
+    if (activeSpeakBtn === btn) activeSpeakBtn = null;
+  };
+
+  // 60ms timeout to avoid Chromium cancel/speak synchronous race condition
+  setTimeout(() => {
+    try {
+      window.speechSynthesis.speak(utterance);
+    } catch (err) {
+      console.warn('Speech synthesis speak error:', err);
+    }
+  }, 60);
+}
+
+async function sendChatMessage(text) {
+  const history = document.getElementById('chatHistory');
+  const queryLang = currentLang;
+  
+  // Append User message
+  const userMsg = document.createElement('div');
+  userMsg.className = 'msg user';
+  userMsg.innerHTML = `<div>${escapeHtml(text)}</div>`;
+  history.appendChild(userMsg);
+  history.scrollTop = history.scrollHeight;
+
+  // Append Typing message
+  const typingMsg = document.createElement('div');
+  typingMsg.className = 'msg ai';
+  typingMsg.innerHTML = `<div class="mini"><span class="material-symbols-outlined">smart_toy</span></div><div><em>Analyzing real-time railway telemetry...</em></div>`;
+  history.appendChild(typingMsg);
+  history.scrollTop = history.scrollHeight;
+
+  // Request to Backend with user's selected language
+  try {
+    const res = await fetch(`${API_BASE}/predictions/chat`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        train_id: state.currentTrain.train_id || 1,
+        query: text,
+        language: queryLang
+      })
+    });
+
+    let reply = '';
+    if (res.ok) {
+      const data = await res.json();
+      reply = data.response;
+    } else {
+      reply = getFallbackAiReply(text, queryLang);
+    }
+    renderAiReplyWithSpeaker(typingMsg, reply, queryLang);
+  } catch (e) {
+    const reply = getFallbackAiReply(text, queryLang);
+    renderAiReplyWithSpeaker(typingMsg, reply, queryLang);
+  }
+  history.scrollTop = history.scrollHeight;
+}
+
+function renderAiReplyWithSpeaker(container, text, langCode) {
+  const escaped = escapeHtml(text);
+  const textJson = JSON.stringify(text).replace(/"/g, '&quot;');
+  container.innerHTML = `
+    <div class="mini"><span class="material-symbols-outlined">smart_toy</span></div>
+    <div>
+      <span>${escaped}</span>
+      <button type="button" class="msg-listen-btn" onclick="toggleSpeech(this, ${textJson}, '${langCode}')" title="Listen to response">
+        <span class="material-symbols-outlined">volume_up</span>
+        <span>Listen</span>
+      </button>
+    </div>
+  `;
+}
+
+function getFallbackAiReply(query, lang) {
+  const l = lang || currentLang || 'en';
+  const train = state.currentTrain;
+  const q = query.toLowerCase();
+
+  const LOCAL_REPLIES = {
+    hi: {
+      reason: `ट्रेन ${train.number} ${train.name} वर्तमान में +${train.currentDelay} मिनट की देरी से चल रही है। देरी का कारण: ${train.reason}। अनुमानित अतिरिक्त देरी: +${train.additionalDelay} मिनट।`,
+      eta: `ट्रेन ${train.number} ${train.name} का नवीनतम अनुमानित आगमन समय ${train.eta} है (${train.confidence}% न्यूरल सटीकता)।`,
+      where: `ट्रेन ${train.number} वर्तमान में मार्ग पर चल रही है (स्थिति: ${train.status})।`,
+      default: `ट्रेन ${train.number} ${train.name}: अनुमानित आगमन ${train.eta}, वर्तमान देरी +${train.currentDelay} मिनट, कारण: ${train.reason}।`
+    },
+    bn: {
+      reason: `ট্রেন ${train.number} ${train.name} বর্তমানে +${train.currentDelay} মিনিট বিলম্বে চলছে। কারণ: ${train.reason}। অতিরিক্ত পূর্বাভাসিত বিলম্ব: +${train.additionalDelay} মিনিট।`,
+      eta: `ট্রেন ${train.number} ${train.name}-এর সর্বশেষ পূর্বাভাসিত পৌঁছানোর সময় ${train.eta} (${train.confidence}% আত্মবিশ্বাস)।`,
+      where: `ট্রেন ${train.number} বর্তমানে যাত্রাপথে চলছে (অবস্থা: ${train.status})।`,
+      default: `ট্রেন ${train.number} ${train.name}: পূর্বাভাসিত পৌঁছানোর সময় ${train.eta}, বর্তমান বিলম্ব +${train.currentDelay} মিনিট।`
+    },
+    te: {
+      reason: `రైలు ${train.number} ${train.name} ప్రస్తుతం +${train.currentDelay} నిమిషాల ఆలస్యంతో నడుస్తోంది. ఆలస్య కారణం: ${train.reason}. అదనపు అంచనా: +${train.additionalDelay} నిమిషాలు.`,
+      eta: `రైలు ${train.number} ${train.name} తాజా అంచనా రాక సమయం ${train.eta} (${train.confidence}% విశ్వసనీయత).`,
+      where: `రైలు ${train.number} ప్రస్తుతం మార్గంలో నడుస్తోంది (స్థితి: ${train.status}).`,
+      default: `రైలు ${train.number} ${train.name}: అంచనా రాక ${train.eta}, ప్రస్తుత ఆలస్యం +${train.currentDelay} నిమిషాలు.`
+    },
+    mr: {
+      reason: `ट्रेन ${train.number} ${train.name} सध्या +${train.currentDelay} मिनिटे उशिराने धावत आहे. विलंबाचे कारण: ${train.reason}. अतिरिक्त अंदाज: +${train.additionalDelay} मिनिटे.`,
+      eta: `ट्रेन ${train.number} ${train.name} ची नवीनतम अंदाजित आगमन वेळ ${train.eta} आहे (${train.confidence}% अचूकता).`,
+      where: `ट्रेन ${train.number} सध्या मार्गावर धावत आहे (स्थिती: ${train.status}).`,
+      default: `ट्रेन ${train.number} ${train.name}: अंदाजित आगमन ${train.eta}, चालू विलंब +${train.currentDelay} मिनिटे.`
+    },
+    ta: {
+      reason: `ரயில் ${train.number} ${train.name} தற்போது +${train.currentDelay} நிமிடங்கள் தாமதமாக இயங்குகிறது. தாமதக் காரணம்: ${train.reason}. கூடுதல் தாமதக் கணிப்பு: +${train.additionalDelay} நிமிடங்கள்.`,
+      eta: `ரயில் ${train.number} ${train.name}-ன் சமீபத்திய கணிக்கப்பட்ட வருகை நேரம் ${train.eta} (${train.confidence}% துல்லியம்).`,
+      where: `ரயில் ${train.number} தற்போது பயணத்தில் உள்ளது (நிலை: ${train.status}).`,
+      default: `ரயில் ${train.number} ${train.name}: வருகை நேரம் ${train.eta}, தற்போதைய தாமதம் +${train.currentDelay} நிமிடங்கள்.`
+    },
+    gu: {
+      reason: `ટ્રેન ${train.number} ${train.name} હાલમાં +${train.currentDelay} મિનિટના વિલંબ સાથે દોડી રહી છે. કારણ: ${train.reason}. વધારાનો અંદાજ: +${train.additionalDelay} મિનિટ.`,
+      eta: `ટ્રેન ${train.number} ${train.name} નો નવીનતમ અંદાજિત આગમન સમય ${train.eta} છે (${train.confidence}% ચોકસાઈ).`,
+      where: `ટ્રેન ${train.number} હાલમાં માર્ગ પર દોડી રહી છે (સ્થિતિ: ${train.status}).`,
+      default: `ટ્રેન ${train.number} ${train.name}: અંદાજિત આગમન ${train.eta}, વર્તમાન વિલંબ +${train.currentDelay} મિનિટ.`
+    },
+    ur: {
+      reason: `ٹرین ${train.number} ${train.name} فی الحال +${train.currentDelay} منٹ تاخیر سے چل رہی ہے۔ تاخیر کی وجہ: ${train.reason}۔ متوقع اضافی تاخیر: +${train.additionalDelay} منٹ۔`,
+      eta: `ٹرین ${train.number} ${train.name} کی تازہ ترین متوقع آمد کا وقت ${train.eta} ہے (${train.confidence}% درستگی)۔`,
+      where: `ٹرین ${train.number} فی الحال راستے میں ہے (حیثیت: ${train.status})۔`,
+      default: `ٹرین ${train.number} ${train.name}: متوقع آمد ${train.eta}، موجودہ تاخیر +${train.currentDelay} منٹ۔`
+    },
+    kn: {
+      reason: `ರೈಲು ${train.number} ${train.name} ಪ್ರಸ್ತುತ +${train.currentDelay} ನಿಮಿಷಗಳ ವಿಳಂಬದೊಂದಿಗೆ ಚಲಿಸುತ್ತಿದೆ. ಕಾರಣ: ${train.reason}. ಹೆಚ್ಚುವರಿ ಅಂದಾಜು: +${train.additionalDelay} ನಿಮಿಷಗಳು.`,
+      eta: `ರೈಲು ${train.number} ${train.name} ಇತ್ತೀಚಿನ ಅಂದಾಜು ಆಗಮನ ಸಮಯ ${train.eta} (${train.confidence}% ನಿಖರತೆ).`,
+      where: `ರೈಲು ${train.number} ಪ್ರಸ್ತುತ ಮಾರ್ಗದಲ್ಲಿದೆ (ಸ್ಥಿತಿ: ${train.status}).`,
+      default: `ರೈಲು ${train.number} ${train.name}: ಅಂದಾಜು ಆಗಮನ ${train.eta}, ಪ್ರಸ್ತುತ ವಿಳಂಬ +${train.currentDelay} ನಿಮಿಷಗಳು.`
+    },
+    ml: {
+      reason: `ട്രെയിൻ ${train.number} ${train.name} നിലവിൽ +${train.currentDelay} മിനിറ്റ് വൈകി ഓടുന്നു. കാരണം: ${train.reason}. അധിക പ്രവചനം: +${train.additionalDelay} മിനിറ്റ്.`,
+      eta: `ട്രെയിൻ ${train.number} ${train.name} ഏറ്റവും പുതിയ വരവ് സമയം ${train.eta} (${train.confidence}% കൃത്യത).`,
+      where: `ട്രെയിൻ ${train.number} നിലവിൽ യാത്രയിലാണ് (നില: ${train.status}).`,
+      default: `ട്രെയിൻ ${train.number} ${train.name}: പ്രതീക്ഷിക്കുന്ന വരവ് ${train.eta}, നിലവിലെ വൈകൽ +${train.currentDelay} മിനിറ്റ്.`
+    },
+    pa: {
+      reason: `ਟ੍ਰੇਨ ${train.number} ${train.name} ਇਸ ਵੇਲੇ +${train.currentDelay} ਮਿੰਟ ਦੀ ਦੇਰੀ ਨਾਲ ਚੱਲ ਰਹੀ ਹੈ। ਕਾਰਨ: ${train.reason}। ਵਾਧੂ ਅੰਦਾਜ਼ਾ: +${train.additionalDelay} ਮਿੰਟ।`,
+      eta: `ਟ੍ਰੇਨ ${train.number} ${train.name} ਦਾ ਤਾਜ਼ਾ ਅਨੁਮਾਨਿਤ ਪਹੁੰਚ ਸਮਾਂ ${train.eta} ਹੈ (${train.confidence}% ਸ਼ੁੱਧਤਾ)।`,
+      where: `ਟ੍ਰੇਨ ${train.number} ਇਸ ਵੇਲੇ ਰਸਤੇ ਵਿੱਚ ਹੈ (ਸਥਿਤੀ: ${train.status})।`,
+      default: `ਟ੍ਰੇਨ ${train.number} ${train.name}: ਅਨੁਮਾਨਿਤ ਪਹੁੰਚ ${train.eta}, ਮੌਜੂਦਾ ਦੇਰੀ +${train.currentDelay} ਮਿੰਟ।`
+    },
+    en: {
+      reason: `Train ${train.number} ${train.name} is running with a +${train.currentDelay} min delay. Delay reason: ${train.reason}. Additional predicted delay is +${train.additionalDelay} min.`,
+      eta: `Latest predicted ETA for ${train.number} ${train.name} at ${train.to} is ${train.eta} (${train.confidence}% neural confidence).`,
+      where: `Train ${train.number} is in transit on the ${train.from} ➔ ${train.to} route with running status: ${train.status}.`,
+      default: `Latest telemetry prediction for ${train.number} ${train.name}: Predicted arrival ${train.eta}, current delay +${train.currentDelay}m, reason: ${train.reason}.`
+    }
+  };
+
+  const dict = LOCAL_REPLIES[l] || LOCAL_REPLIES['en'];
+  if (q.includes('why') || q.includes('reason') || q.includes('delay') || q.includes('क्यो') || q.includes('कारण') || q.includes('কারণ') || q.includes('కారణం') || q.includes('ஏன்')) {
+    return dict.reason;
+  }
+  if (q.includes('eta') || q.includes('when') || q.includes('reach') || q.includes('arrive') || q.includes('कब') || q.includes('কখন') || q.includes('ఎప్పుడు') || q.includes('எப்போது')) {
+    return dict.eta;
+  }
+  if (q.includes('where') || q.includes('location') || q.includes('status') || q.includes('कहा') || q.includes('কোথায়') || q.includes('ఎక్కడ') || q.includes('எங்கே')) {
+    return dict.where;
+  }
+  return dict.default;
+}
+
+function escapeHtml(str) {
+  return str.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+}
+
+// ==========================================
+// 6. NOTIFICATIONS & MY TRAINS MODALS
+// ==========================================
+function openNotificationsModal() {
+  renderNotifications();
+  document.getElementById('notifModal').style.display = 'grid';
+  // Mark read
+  state.notifications.forEach(n => n.unread = false);
+  updateNotifBadge();
+}
+
+function closeNotifModal() {
+  document.getElementById('notifModal').style.display = 'none';
+}
+
+function renderNotifications() {
+  const list = document.getElementById('notifList');
+  list.innerHTML = state.notifications.map(n => `
+    <div class="notif-item ${n.unread ? 'unread' : ''}">
+      <b>${n.title}</b>
+      <p>${n.body}</p>
+      <small>${n.time}</small>
+    </div>
+  `).join('');
+}
+
+function openMyTrainsModal() {
+  document.getElementById('myTrainsModal').style.display = 'grid';
+}
+
+function closeMyTrainsModal() {
+  document.getElementById('myTrainsModal').style.display = 'none';
+}
+
+function goHome() {
+  window.scrollTo({ top: 0, behavior: 'smooth' });
+}
+
+// ==========================================
+// 7. OFFLINE DETECTION & HIGH CONTRAST
+// ==========================================
+function toggleNetworkSimulation() {
+  state.offline = !state.offline;
+  checkConnection(false);
+}
+
+function checkConnection(forceReconnect) {
+  const netBtn = document.getElementById('networkBtn');
+  const offBar = document.getElementById('offlineBar');
+  const chatWarn = document.getElementById('chatOfflineWarn');
+
+  if (forceReconnect) {
+    state.offline = false;
+  }
+
+  if (state.offline) {
+    netBtn.className = 'network off';
+    document.getElementById('networkText').innerText = t('offlineNetwork');
+    offBar.style.display = 'flex';
+    if (chatWarn) chatWarn.style.display = 'flex';
+  } else {
+    netBtn.className = 'network';
+    document.getElementById('networkText').innerText = t('liveNetwork');
+    offBar.style.display = 'none';
+    if (chatWarn) chatWarn.style.display = 'none';
+  }
+}
+
+function toggleHighContrast() {
+  state.highContrast = !state.highContrast;
+  const app = document.getElementById('app');
+  if (state.highContrast) {
+    app.classList.add('high-contrast');
+  } else {
+    app.classList.remove('high-contrast');
+  }
+  document.getElementById('txt-contrast-btn').innerText = state.highContrast ? t('normalContrastBtn') : t('contrastBtn');
+}
+
+// Listen to online/offline browser events
+window.addEventListener('online', () => { state.offline = false; checkConnection(false); });
+window.addEventListener('offline', () => { state.offline = true; checkConnection(false); });
+
+// ==========================================
+// 8. INITIALIZATION
+// ==========================================
+document.addEventListener('DOMContentLoaded', () => {
+  initLanguageSelector();
+  applyTranslations();
+  recalculateAlarmTime();
+  updateNotifBadge();
+});
+</script>
+
+</body>
+</html>

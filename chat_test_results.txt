@@ -1,0 +1,34 @@
+[EN] Q: What is the current train delay?
+       A: Current weather along the route includes regional visibility conditions and speed restrictions integrated into the ETA model.
+[EN] Q: Why is the train delayed?
+       A: Current weather along the route includes regional visibility conditions and speed restrictions integrated into the ETA model.
+[EN] Q: What is the weather?
+       A: Current weather along the route includes regional visibility conditions and speed restrictions integrated into the ETA model.
+[EN] Q: Tell me about the route.
+       A: Your train is progressing along its scheduled route. Signals and section occupancy are actively monitored.
+[EN] Q: What is the ETA?
+       A: Estimated arrival time is 7:53 AM. Dynamic forecast interval: 7:52 AM to 7:53 AM.
+[EN] Q: Where is the train currently?
+       A: Current weather along the route includes regional visibility conditions and speed restrictions integrated into the ETA model.
+[HI] Q: ट्रेन कितनी देर से चल रही है?
+       A: वर्तमान रनिंग देरी 4 मिनट है। अनुमानित अतिरिक्त देरी: +6 मिनट।
+[HI] Q: देरी का कारण क्या है?
+       A: देरी का कारण: Likely contributors: multiple trains ahead, speed restriction.। अनुमानित अतिरिक्त देरी +6 मिनट है।
+[HI] Q: मौसम कैसा है?
+       A: मार्ग में दृश्यता और मौसम संबंधी स्थितियों को एआई आगमन समय में शामिल किया गया है।
+[TA] Q: வானிலை எப்படி இருக்கிறது?
+       A: வழித்தட வானிலை மற்றும் பார்வைத் திறன் காரணிகள் AI கணிப்பில் சேர்க்கப்பட்டுள்ளன.
+[TA] Q: தாமத காரணம் என்ன?
+       A: வருகை நேரம் (ETA), தற்போதைய தாமதம், தாமதக் காரணங்கள் மற்றும் வானிலை விவரங்களை நான் வழங்க முடியும்.
+[BN] Q: ট্রেন কত দেরিতে চলছে?
+       A: আমি ট্রেনের আগমন সময় (ETA), বর্তমান বিলম্ব, বিলম্বের কারণ এবং আবহাওয়ার তথ্য প্রদান করতে পারি।
+[BN] Q: আবহাওয়া কেমন?
+       A: আমি ট্রেনের আগমন সময় (ETA), বর্তমান বিলম্ব, বিলম্বের কারণ এবং আবহাওয়ার তথ্য প্রদান করতে পারি।
+[TE] Q: విలంబం ఎంత?
+       A: నేను రైలు రాక సమయం (ETA), ప్రస్తుత ఆలస్యం, ఆలస్య కారణాలు మరియు వాతావరణ సమాచారాన్ని అందించగలను.
+[MR] Q: विलंबाचे कारण काय?
+       A: विलंबाचे कारण: Likely contributors: high current delay.. अपेक्षित अतिरिक्त विलंब +3 मिनिटे आहे.
+[GU] Q: વિલંબનું કારણ શું છે?
+       A: વર્તમાન દોડવાનો વિલંબ 4 મિનિટ છે. અંદાજિત વધારાનો વિલંબ: +3 મિનિટ.
+[UR] Q: تاخیر کی وجہ کیا ہے؟
+       A: میں متوقع آمد کا وقت (ETA)، موجودہ تاخیر، تاخیر کی وجوہات اور موسم کی معلومات فراہم کر سکتا ہوں۔
